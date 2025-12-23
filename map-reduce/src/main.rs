@@ -4,9 +4,30 @@ mod reducer;
 
 use orchestrator::Orchestrator;
 use rand::Rng;
+use serde::Deserialize;
 use std::collections::HashMap;
+use std::fs;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+
+#[derive(Debug, Deserialize)]
+struct Config {
+    num_strings: usize,
+    max_string_length: usize,
+    num_target_words: usize,
+    target_word_length: usize,
+    partition_size: usize,
+    num_mappers: usize,
+    num_reducers: usize,
+}
+
+impl Config {
+    fn load(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let contents = fs::read_to_string(path)?;
+        let config: Config = serde_json::from_str(&contents)?;
+        Ok(config)
+    }
+}
 
 /// Generate a random string of up to max_len characters
 fn generate_random_string(rng: &mut impl Rng, max_len: usize) -> String {
@@ -20,8 +41,8 @@ fn generate_random_string(rng: &mut impl Rng, max_len: usize) -> String {
 }
 
 /// Generate a random 3-digit word (3 characters)
-fn generate_3_digit_word(rng: &mut impl Rng) -> String {
-    (0..3)
+fn generate_target_word(rng: &mut impl Rng, length: usize) -> String {
+    (0..length)
         .map(|_| {
             let idx = rng.gen_range(0..26);
             (b'a' + idx) as char
@@ -33,20 +54,48 @@ fn generate_3_digit_word(rng: &mut impl Rng) -> String {
 async fn main() {
     let start_time = Instant::now();
 
+    // Load configuration from JSON file
+    let config = match Config::load("config.json") {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!("Failed to load config.json: {}", e);
+            eprintln!("Using default configuration...");
+            Config {
+                num_strings: 1_000_000,
+                max_string_length: 20,
+                num_target_words: 100,
+                target_word_length: 3,
+                partition_size: 10_000,
+                num_mappers: 100,
+                num_reducers: 10,
+            }
+        }
+    };
+
     println!("=== MAP-REDUCE WORD SEARCH ===");
-    println!("Generating data...");
+    println!("Configuration:");
+    println!("  - Strings: {}", config.num_strings);
+    println!("  - Max string length: {}", config.max_string_length);
+    println!("  - Target words: {}", config.num_target_words);
+    println!("  - Target word length: {}", config.target_word_length);
+    println!("  - Partition size: {}", config.partition_size);
+    println!("  - Mappers: {}", config.num_mappers);
+    println!("  - Reducers: {}", config.num_reducers);
+    println!("\nGenerating data...");
 
     let mut rng = rand::thread_rng();
 
-    // Generate 1,000,000 random strings (up to 20 chars each)
-    let data: Vec<String> = (0..1_000_000)
-        .map(|_| generate_random_string(&mut rng, 20))
+    // Generate random strings
+    let data: Vec<String> = (0..config.num_strings)
+        .map(|_| generate_random_string(&mut rng, config.max_string_length))
         .collect();
 
     println!("Generated {} strings", data.len());
 
-    // Generate 100 random 3-character target words
-    let targets: Vec<String> = (0..100).map(|_| generate_3_digit_word(&mut rng)).collect();
+    // Generate random target words
+    let targets: Vec<String> = (0..config.num_target_words)
+        .map(|_| generate_target_word(&mut rng, config.target_word_length))
+        .collect();
 
     println!("Generated {} target words", targets.len());
 
@@ -58,26 +107,25 @@ async fn main() {
             .collect(),
     ));
 
-    // Partition data into 100 chunks for 100 mappers
-    let num_mappers = 100;
-    let chunk_size = data.len() / num_mappers;
+    // Partition data into chunks based on partition_size
     let mut data_chunks = Vec::new();
+    let num_partitions = (data.len() + config.partition_size - 1) / config.partition_size;
 
-    for i in 0..num_mappers {
-        let start = i * chunk_size;
-        let end = if i == num_mappers - 1 {
-            data.len()
-        } else {
-            (i + 1) * chunk_size
-        };
+    for i in 0..num_partitions {
+        let start = i * config.partition_size;
+        let end = std::cmp::min(start + config.partition_size, data.len());
         data_chunks.push(data[start..end].to_vec());
     }
 
-    println!("Partitioned data into {} chunks", data_chunks.len());
+    println!(
+        "Partitioned data into {} chunks for {} mappers",
+        data_chunks.len(),
+        config.num_mappers
+    );
     println!("\nStarting MapReduce...");
 
     // Create orchestrator and run
-    let mut orchestrator = Orchestrator::new();
+    let mut orchestrator = Orchestrator::new(config.num_mappers, config.num_reducers);
     let cancel_token = orchestrator.cancellation_token();
 
     // Setup Ctrl+C handler

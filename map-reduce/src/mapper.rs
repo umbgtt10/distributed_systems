@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -33,20 +34,15 @@ impl Mapper {
         }
     }
 
-    /// Starts processing the assigned data chunk
-    pub fn start(&mut self, assignment: WorkAssignment) {
+    /// Processes a single chunk of data
+    pub fn process_chunk(&mut self, assignment: WorkAssignment, complete_tx: mpsc::Sender<usize>) {
         let id = self.id;
         let shared_map = self.shared_map.clone();
         let cancel_token = self.cancel_token.clone();
 
         let handle = tokio::spawn(async move {
             if id.is_multiple_of(10) {
-                println!(
-                    "Mapper {} processing {} items from chunk {}",
-                    id,
-                    assignment.data.len(),
-                    assignment.chunk_id
-                );
+                println!("Mapper {} processing chunk {}", id, assignment.chunk_id);
             }
 
             // Process each string in the chunk
@@ -72,6 +68,9 @@ impl Mapper {
             if id.is_multiple_of(10) {
                 println!("Mapper {} finished chunk {}", id, assignment.chunk_id);
             }
+
+            // Notify orchestrator that this mapper is done
+            let _ = complete_tx.send(id).await;
         });
 
         self.task_handle = Some(handle);
