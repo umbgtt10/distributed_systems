@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 /// Reducer assignment - which keys this reducer is responsible for
 pub struct ReducerAssignment {
@@ -9,61 +11,84 @@ pub struct ReducerAssignment {
 
 /// Reducer worker that sums up vectors into final counts
 pub struct Reducer {
-    id: usize,
-    shared_map: Arc<Mutex<HashMap<String, Vec<i32>>>>,
-    task_handle: Option<JoinHandle<()>>,
+    work_tx: mpsc::Sender<ReducerAssignment>,
+    task_handle: JoinHandle<()>,
 }
 
 impl Reducer {
-    pub fn new(id: usize, shared_map: Arc<Mutex<HashMap<String, Vec<i32>>>>) -> Self {
+    pub fn new(
+        id: usize,
+        shared_map: Arc<Mutex<HashMap<String, Vec<i32>>>>,
+        cancel_token: CancellationToken,
+    ) -> Self {
+        let (work_tx, work_rx) = mpsc::channel::<ReducerAssignment>(10);
+
+        let handle = tokio::spawn(Self::run_task(id, work_rx, shared_map, cancel_token));
+
         Self {
-            id,
-            shared_map,
-            task_handle: None,
+            work_tx,
+            task_handle: handle,
         }
     }
 
-    /// Starts reducing values for assigned keys
-    pub fn start(&mut self, assignment: ReducerAssignment) {
-        let id = self.id;
-        let shared_map = self.shared_map.clone();
+    async fn run_task(
+        id: usize,
+        mut work_rx: mpsc::Receiver<ReducerAssignment>,
+        shared_map: Arc<Mutex<HashMap<String, Vec<i32>>>>,
+        cancel_token: CancellationToken,
+    ) {
+        loop {
+            tokio::select! {
+                work = work_rx.recv() => {
+                    match work {
+                        Some(assignment) => {
+                            if id.is_multiple_of(2) {
+                                println!("Reducer {} started for {} keys", id, assignment.keys.len());
+                            }
 
-        let handle = tokio::spawn(async move {
-            if id.is_multiple_of(2) {
-                println!("Reducer {} started for {} keys", id, assignment.keys.len());
-            }
+                            for key in assignment.keys {
+                                // Get the vector for this key and sum it
+                                let count = {
+                                    let map = shared_map.lock().unwrap();
+                                    if let Some(vec) = map.get(&key) {
+                                        vec.iter().sum::<i32>()
+                                    } else {
+                                        0
+                                    }
+                                };
 
-            for key in assignment.keys {
-                // Get the vector for this key and sum it
-                let count = {
-                    let map = shared_map.lock().unwrap();
-                    if let Some(vec) = map.get(&key) {
-                        vec.iter().sum::<i32>()
-                    } else {
-                        0
+                                // Update the shared map with the final count
+                                let mut map = shared_map.lock().unwrap();
+                                map.insert(key.clone(), vec![count]);
+                            }
+
+                            if id.is_multiple_of(2) {
+                                println!("Reducer {} finished", id);
+                            }
+                        }
+                        None => {
+                            // Channel closed, exit
+                            break;
+                        }
                     }
-                };
-
-                // Update the shared map with the final count
-                // We replace Vec<i32> with the summed count by storing it as a single-element vec
-                let mut map = shared_map.lock().unwrap();
-                map.insert(key.clone(), vec![count]);
+                }
+                _ = cancel_token.cancelled() => {
+                    println!("Reducer {} cancelled", id);
+                    break;
+                }
             }
+        }
+    }
 
-            if id.is_multiple_of(2) {
-                println!("Reducer {} finished", id);
-            }
-        });
-
-        self.task_handle = Some(handle);
+    /// Sends a work assignment to the reducer
+    pub fn start(&self, assignment: ReducerAssignment) {
+        // Send work to the reducer task
+        let _ = self.work_tx.try_send(assignment);
     }
 
     /// Waits for the reducer task to complete
     pub async fn wait(self) -> Result<(), tokio::task::JoinError> {
-        if let Some(handle) = self.task_handle {
-            handle.await
-        } else {
-            Ok(())
-        }
+        drop(self.work_tx); // Close the channel to signal task to exit
+        self.task_handle.await
     }
 }

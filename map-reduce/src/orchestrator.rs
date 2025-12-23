@@ -126,7 +126,11 @@ impl Orchestrator {
                 keys: assigned_keys,
             };
 
-            let mut reducer = Reducer::new(reducer_id, shared_map.clone());
+            let reducer = Reducer::new(
+                reducer_id,
+                shared_map.clone(),
+                self.cancellation_token.clone(),
+            );
             reducer.start(assignment);
             reducers.push(reducer);
         }

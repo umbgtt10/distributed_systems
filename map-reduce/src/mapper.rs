@@ -14,10 +14,8 @@ pub struct WorkAssignment {
 
 /// Mapper worker that searches for target words in its data chunk
 pub struct Mapper {
-    id: usize,
-    shared_map: Arc<Mutex<HashMap<String, Vec<i32>>>>,
-    cancel_token: CancellationToken,
-    task_handle: Option<JoinHandle<()>>,
+    work_tx: mpsc::Sender<(WorkAssignment, mpsc::Sender<usize>)>,
+    task_handle: JoinHandle<()>,
 }
 
 impl Mapper {
@@ -26,62 +24,81 @@ impl Mapper {
         shared_map: Arc<Mutex<HashMap<String, Vec<i32>>>>,
         cancel_token: CancellationToken,
     ) -> Self {
+        let (work_tx, work_rx) = mpsc::channel::<(WorkAssignment, mpsc::Sender<usize>)>(10);
+
+        let handle = tokio::spawn(Self::run_task(id, work_rx, shared_map, cancel_token));
+
         Self {
-            id,
-            shared_map,
-            cancel_token,
-            task_handle: None,
+            work_tx,
+            task_handle: handle,
         }
     }
 
-    /// Processes a single chunk of data
-    pub fn process_chunk(&mut self, assignment: WorkAssignment, complete_tx: mpsc::Sender<usize>) {
-        let id = self.id;
-        let shared_map = self.shared_map.clone();
-        let cancel_token = self.cancel_token.clone();
-
-        let handle = tokio::spawn(async move {
-            if id.is_multiple_of(10) {
-                println!("Mapper {} processing chunk {}", id, assignment.chunk_id);
-            }
-
-            // Process each string in the chunk
-            for text in assignment.data {
-                // Check for cancellation
-                if cancel_token.is_cancelled() {
-                    println!("Mapper {} cancelled", id);
-                    return;
-                }
-
-                // Search for each target word in the text
-                for target in &assignment.targets {
-                    if text.contains(target.as_str()) {
-                        // Found a match! Add 1 to the vector for this target
-                        let mut map = shared_map.lock().unwrap();
-                        if let Some(vec) = map.get_mut(target) {
-                            vec.push(1);
-                        }
-                    }
-                }
-            }
-
-            if id.is_multiple_of(10) {
-                println!("Mapper {} finished chunk {}", id, assignment.chunk_id);
-            }
-
-            // Notify orchestrator that this mapper is done
-            let _ = complete_tx.send(id).await;
-        });
-
-        self.task_handle = Some(handle);
+    /// Sends a work assignment to the mapper
+    pub fn process_chunk(&self, assignment: WorkAssignment, complete_tx: mpsc::Sender<usize>) {
+        // Send work to the mapper task
+        let _ = self.work_tx.try_send((assignment, complete_tx));
     }
 
     /// Waits for the mapper task to complete
     pub async fn wait(self) -> Result<(), tokio::task::JoinError> {
-        if let Some(handle) = self.task_handle {
-            handle.await
-        } else {
-            Ok(())
+        drop(self.work_tx); // Close the channel to signal task to exit
+        self.task_handle.await
+    }
+
+    async fn run_task(
+        id: usize,
+        mut work_rx: mpsc::Receiver<(WorkAssignment, mpsc::Sender<usize>)>,
+        shared_map: Arc<Mutex<HashMap<String, Vec<i32>>>>,
+        cancel_token: CancellationToken,
+    ) {
+        loop {
+            tokio::select! {
+                work = work_rx.recv() => {
+                    match work {
+                        Some((assignment, complete_tx)) => {
+                            if id.is_multiple_of(10) {
+                                println!("Mapper {} processing chunk {}", id, assignment.chunk_id);
+                            }
+
+                            // Process each string in the chunk
+                            for text in assignment.data {
+                                // Check for cancellation
+                                if cancel_token.is_cancelled() {
+                                    println!("Mapper {} cancelled", id);
+                                    return;
+                                }
+
+                                // Search for each target word in the text
+                                for target in &assignment.targets {
+                                    if text.contains(target.as_str()) {
+                                        // Found a match! Add 1 to the vector for this target
+                                        let mut map = shared_map.lock().unwrap();
+                                        if let Some(vec) = map.get_mut(target) {
+                                            vec.push(1);
+                                        }
+                                    }
+                                }
+                            }
+
+                            if id.is_multiple_of(10) {
+                                println!("Mapper {} finished chunk {}", id, assignment.chunk_id);
+                            }
+
+                            // Notify orchestrator that this mapper is done
+                            let _ = complete_tx.send(id).await;
+                        }
+                        None => {
+                            // Channel closed, exit
+                            break;
+                        }
+                    }
+                }
+                _ = cancel_token.cancelled() => {
+                    println!("Mapper {} cancelled", id);
+                    break;
+                }
+            }
         }
     }
 }
