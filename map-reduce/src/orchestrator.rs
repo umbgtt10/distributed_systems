@@ -2,7 +2,6 @@ use crate::mapper::{Mapper, WorkAssignment};
 use crate::reducer::{Reducer, ReducerAssignment};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 /// Orchestrator coordinates the map-reduce workflow
@@ -35,7 +34,7 @@ impl Orchestrator {
         println!("\n=== MAP PHASE ===");
         println!("Starting {} mappers...", data_chunks.len());
 
-        let mut mapper_tasks: Vec<JoinHandle<()>> = Vec::new();
+        let mut mappers: Vec<Mapper> = Vec::new();
 
         // Start all mappers in parallel
         for (id, chunk) in data_chunks.into_iter().enumerate() {
@@ -45,15 +44,15 @@ impl Orchestrator {
                 targets: targets.clone(),
             };
 
-            let mapper = Mapper::new(id, shared_map.clone(), self.cancellation_token.clone());
-            let handle = mapper.start(assignment);
-            mapper_tasks.push(handle);
+            let mut mapper = Mapper::new(id, shared_map.clone(), self.cancellation_token.clone());
+            mapper.start(assignment);
+            mappers.push(mapper);
         }
 
         // Wait for all mappers to complete
         println!("Waiting for all mappers to complete...");
-        for (idx, task) in mapper_tasks.into_iter().enumerate() {
-            if let Err(e) = task.await {
+        for (idx, mapper) in mappers.into_iter().enumerate() {
+            if let Err(e) = mapper.wait().await {
                 eprintln!("Mapper {} task failed: {}", idx, e);
             }
         }
@@ -65,7 +64,7 @@ impl Orchestrator {
 
         let num_reducers = 10;
         let keys_per_reducer = targets.len() / num_reducers;
-        let mut reducer_tasks: Vec<JoinHandle<()>> = Vec::new();
+        let mut reducers: Vec<Reducer> = Vec::new();
 
         // Partition the keys among reducers
         for reducer_id in 0..num_reducers {
@@ -81,15 +80,15 @@ impl Orchestrator {
                 keys: assigned_keys,
             };
 
-            let reducer = Reducer::new(reducer_id, shared_map.clone());
-            let handle = reducer.reduce(assignment).await;
-            reducer_tasks.push(handle);
+            let mut reducer = Reducer::new(reducer_id, shared_map.clone());
+            reducer.start(assignment);
+            reducers.push(reducer);
         }
 
         // Wait for all reducers to complete
         println!("Waiting for all reducers to complete...");
-        for (idx, task) in reducer_tasks.into_iter().enumerate() {
-            if let Err(e) = task.await {
+        for (idx, reducer) in reducers.into_iter().enumerate() {
+            if let Err(e) = reducer.wait().await {
                 eprintln!("Reducer {} task failed: {}", idx, e);
             }
         }

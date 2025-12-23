@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 /// Work assignment for a mapper - describes what chunk to process
@@ -15,6 +16,7 @@ pub struct Mapper {
     id: usize,
     shared_map: Arc<Mutex<HashMap<String, Vec<i32>>>>,
     cancel_token: CancellationToken,
+    task_handle: Option<JoinHandle<()>>,
 }
 
 impl Mapper {
@@ -27,16 +29,21 @@ impl Mapper {
             id,
             shared_map,
             cancel_token,
+            task_handle: None,
         }
     }
 
-    /// Spawns a task that processes its assigned data chunk
-    pub fn start(self, assignment: WorkAssignment) -> tokio::task::JoinHandle<()> {
-        tokio::spawn(async move {
-            if self.id.is_multiple_of(10) {
+    /// Starts processing the assigned data chunk
+    pub fn start(&mut self, assignment: WorkAssignment) {
+        let id = self.id;
+        let shared_map = self.shared_map.clone();
+        let cancel_token = self.cancel_token.clone();
+
+        let handle = tokio::spawn(async move {
+            if id.is_multiple_of(10) {
                 println!(
                     "Mapper {} processing {} items from chunk {}",
-                    self.id,
+                    id,
                     assignment.data.len(),
                     assignment.chunk_id
                 );
@@ -45,8 +52,8 @@ impl Mapper {
             // Process each string in the chunk
             for text in assignment.data {
                 // Check for cancellation
-                if self.cancel_token.is_cancelled() {
-                    println!("Mapper {} cancelled", self.id);
+                if cancel_token.is_cancelled() {
+                    println!("Mapper {} cancelled", id);
                     return;
                 }
 
@@ -54,7 +61,7 @@ impl Mapper {
                 for target in &assignment.targets {
                     if text.contains(target.as_str()) {
                         // Found a match! Add 1 to the vector for this target
-                        let mut map = self.shared_map.lock().unwrap();
+                        let mut map = shared_map.lock().unwrap();
                         if let Some(vec) = map.get_mut(target) {
                             vec.push(1);
                         }
@@ -62,9 +69,20 @@ impl Mapper {
                 }
             }
 
-            if self.id.is_multiple_of(10) {
-                println!("Mapper {} finished chunk {}", self.id, assignment.chunk_id);
+            if id.is_multiple_of(10) {
+                println!("Mapper {} finished chunk {}", id, assignment.chunk_id);
             }
-        })
+        });
+
+        self.task_handle = Some(handle);
+    }
+
+    /// Waits for the mapper task to complete
+    pub async fn wait(self) -> Result<(), tokio::task::JoinError> {
+        if let Some(handle) = self.task_handle {
+            handle.await
+        } else {
+            Ok(())
+        }
     }
 }
