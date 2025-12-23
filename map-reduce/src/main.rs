@@ -1,54 +1,13 @@
+mod config;
 mod mapper;
 mod orchestrator;
 mod reducer;
 
+use config::{Config, generate_random_string, generate_target_word};
 use orchestrator::Orchestrator;
-use rand::Rng;
-use serde::Deserialize;
 use std::collections::HashMap;
-use std::fs;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-
-#[derive(Debug, Deserialize)]
-struct Config {
-    num_strings: usize,
-    max_string_length: usize,
-    num_target_words: usize,
-    target_word_length: usize,
-    partition_size: usize,
-    num_mappers: usize,
-    num_reducers: usize,
-}
-
-impl Config {
-    fn load(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let contents = fs::read_to_string(path)?;
-        let config: Config = serde_json::from_str(&contents)?;
-        Ok(config)
-    }
-}
-
-/// Generate a random string of up to max_len characters
-fn generate_random_string(rng: &mut impl Rng, max_len: usize) -> String {
-    let len = rng.gen_range(1..=max_len);
-    (0..len)
-        .map(|_| {
-            let idx = rng.gen_range(0..26);
-            (b'a' + idx) as char
-        })
-        .collect()
-}
-
-/// Generate a random 3-digit word (3 characters)
-fn generate_target_word(rng: &mut impl Rng, length: usize) -> String {
-    (0..length)
-        .map(|_| {
-            let idx = rng.gen_range(0..26);
-            (b'a' + idx) as char
-        })
-        .collect()
-}
 
 #[tokio::main]
 async fn main() {
@@ -60,15 +19,7 @@ async fn main() {
         Err(e) => {
             eprintln!("Failed to load config.json: {}", e);
             eprintln!("Using default configuration...");
-            Config {
-                num_strings: 1_000_000,
-                max_string_length: 20,
-                num_target_words: 100,
-                target_word_length: 3,
-                partition_size: 10_000,
-                num_mappers: 100,
-                num_reducers: 10,
-            }
+            Config::default()
         }
     };
 
@@ -109,7 +60,7 @@ async fn main() {
 
     // Partition data into chunks based on partition_size
     let mut data_chunks = Vec::new();
-    let num_partitions = (data.len() + config.partition_size - 1) / config.partition_size;
+    let num_partitions = data.len().div_ceil(config.partition_size);
 
     for i in 0..num_partitions {
         let start = i * config.partition_size;
