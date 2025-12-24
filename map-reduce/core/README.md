@@ -26,7 +26,7 @@ pub trait Worker: Send {
     type Assignment: Send;
     type Completion;
     type Error: Display;
-    
+
     fn send_work(&self, assignment: Self::Assignment, complete_tx: Self::Completion);
     fn wait(self) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }

@@ -8,10 +8,10 @@ This implementation uses **Tokio async tasks** with **mpsc channels** for commun
 
 ## Overview
 
-**Execution Model**: Tokio async tasks  
-**Communication**: `tokio::sync::mpsc` channels (in-memory)  
-**State Storage**: `LocalStateAccess` (shared HashMap)  
-**Isolation**: None (single process, shared memory)  
+**Execution Model**: Tokio async tasks
+**Communication**: `tokio::sync::mpsc` channels (in-memory)
+**State Storage**: `LocalStateAccess` (shared HashMap)
+**Isolation**: None (single process, shared memory)
 **Performance**: ⭐⭐⭐ Fastest (0.75-1.51s)
 
 ---

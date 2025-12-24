@@ -8,10 +8,10 @@ This implementation uses **OS threads** with **TCP sockets** for communication. 
 
 ## Overview
 
-**Execution Model**: OS threads (one per worker)  
-**Communication**: TCP sockets with JSON serialization  
-**State Storage**: `LocalStateAccess` (shared HashMap via `Arc<Mutex>`)  
-**Isolation**: Thread-level (shared memory, separate stacks)  
+**Execution Model**: OS threads (one per worker)
+**Communication**: TCP sockets with JSON serialization
+**State Storage**: `LocalStateAccess` (shared HashMap via `Arc<Mutex>`)
+**Isolation**: Thread-level (shared memory, separate stacks)
 **Performance**: ⭐⭐ Moderate (1.10-2.32s)
 
 ---

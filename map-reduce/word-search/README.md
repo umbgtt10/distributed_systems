@@ -8,9 +8,9 @@ This crate defines the **business logic** for a word search MapReduce job. It im
 
 ## Overview
 
-**Purpose**: Count occurrences of target words in a collection of text files  
-**Algorithm**: MapReduce word count  
-**Trait**: Implements `MapReduceJob` from `core`  
+**Purpose**: Count occurrences of target words in a collection of text files
+**Algorithm**: MapReduce word count
+**Trait**: Implements `MapReduceJob` from `core`
 **Infrastructure**: Works with **all three implementations** (task-channels, thread-socket, process-rpc)
 
 ---
@@ -26,7 +26,7 @@ Output:
 
 **Example**:
 ```
-Input: 
+Input:
   Files: ["war_and_peace.txt", "moby_dick.txt"]
   Targets: ["the", "whale", "captain"]
 
@@ -42,8 +42,8 @@ Output:
 
 ### Map Phase
 
-**Input**: Chunk of text lines  
-**Output**: Emit (word, 1) for each occurrence  
+**Input**: Chunk of text lines
+**Output**: Emit (word, 1) for each occurrence
 
 ```rust
 fn map_work<S>(assignment: &MapWorkAssignment, state: &S)
@@ -54,7 +54,7 @@ where
         let words = line.split_whitespace()
             .map(|w| w.to_lowercase())
             .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()));
-        
+
         for word in words {
             if assignment.targets.contains(&word.to_string()) {
                 // Emit: word -> count
@@ -72,8 +72,8 @@ where
 
 ### Reduce Phase
 
-**Input**: Partition of target words  
-**Output**: Final count for each word  
+**Input**: Partition of target words
+**Output**: Final count for each word
 
 ```rust
 fn reduce_work<S>(assignment: &ReduceWorkAssignment, state: &S)
@@ -83,10 +83,10 @@ where
     for key in &assignment.keys {
         // Read accumulated count from state
         let count: usize = state.get(key).unwrap_or(0);
-        
+
         // In this implementation, state already contains final counts
         // Reduce phase ensures all counts are committed
-        
+
         // Could perform additional aggregation here
         // (e.g., filtering, sorting, top-K)
     }
@@ -159,12 +159,12 @@ fn create_map_assignments(
     partition_size: usize,       // Lines per chunk
 ) -> Vec<MapWorkAssignment> {
     let num_partitions = data.len().div_ceil(partition_size);
-    
+
     (0..num_partitions)
         .map(|i| {
             let start = i * partition_size;
             let end = min(start + partition_size, data.len());
-            
+
             MapWorkAssignment {
                 chunk_id: i,
                 data: data[start..end].to_vec(),
@@ -188,12 +188,12 @@ fn create_reduce_assignments(
 ) -> Vec<ReduceWorkAssignment> {
     let targets = context.targets;
     let num_partitions = targets.len().div_ceil(keys_per_reducer);
-    
+
     (0..num_partitions)
         .map(|i| {
             let start = i * keys_per_reducer;
             let end = min(start + keys_per_reducer, targets.len());
-            
+
             ReduceWorkAssignment {
                 keys: targets[start..end].to_vec(),
             }
@@ -405,7 +405,7 @@ Total words counted: 1107186
 impl MapReduceJob for InvertedIndexProblem {
     type MapAssignment = DocumentChunk;
     type ReduceAssignment = TermPartition;
-    
+
     fn map_work<S>(assignment: &DocumentChunk, state: &S) {
         for (doc_id, text) in &assignment.docs {
             for word in tokenize(text) {
@@ -414,7 +414,7 @@ impl MapReduceJob for InvertedIndexProblem {
             }
         }
     }
-    
+
     fn reduce_work<S>(assignment: &TermPartition, state: &S) {
         for term in &assignment.terms {
             let doc_list: Vec<usize> = state.get(term).unwrap_or_default();
@@ -430,7 +430,7 @@ impl MapReduceJob for InvertedIndexProblem {
 impl MapReduceJob for PageRankProblem {
     type MapAssignment = GraphPartition;
     type ReduceAssignment = NodePartition;
-    
+
     fn map_work<S>(assignment: &GraphPartition, state: &S) {
         for (node, rank, neighbors) in &assignment.nodes {
             let contribution = rank / neighbors.len() as f64;
@@ -439,7 +439,7 @@ impl MapReduceJob for PageRankProblem {
             }
         }
     }
-    
+
     fn reduce_work<S>(assignment: &NodePartition, state: &S) {
         for node in &assignment.nodes {
             let rank: f64 = state.get(node).unwrap_or(0.0);
