@@ -1,4 +1,4 @@
-use crate::completion_signaling::CompletionSignaling;
+use map_reduce_core::completion_signaling::CompletionSignaling;
 use tokio::sync::mpsc::{self, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::{StreamExt, StreamMap};

@@ -1,6 +1,9 @@
 /// Trait for accessing shared state across workers
 /// Abstracts the storage mechanism (local, Redis, RPC, etc.)
 pub trait StateAccess: Clone + Send + Sync + 'static {
+    /// Initialize keys with empty vectors
+    fn initialize(&self, keys: Vec<String>);
+
     /// Update a key with a value (append for mappers)
     fn update(&self, key: String, value: i32);
 
@@ -9,7 +12,4 @@ pub trait StateAccess: Clone + Send + Sync + 'static {
 
     /// Get all values for a key
     fn get(&self, key: &str) -> Vec<i32>;
-
-    /// Initialize keys with empty vectors
-    fn initialize(&self, keys: Vec<String>);
 }

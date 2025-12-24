@@ -1,8 +1,8 @@
-use crate::shutdown_signal::ShutdownSignal;
-use crate::state_access::StateAccess;
-use crate::work_channel::WorkChannel;
-use crate::worker::Worker;
-use crate::worker_runtime::WorkerRuntime;
+use map_reduce_core::shutdown_signal::ShutdownSignal;
+use map_reduce_core::state_access::StateAccess;
+use map_reduce_core::work_channel::WorkChannel;
+use map_reduce_core::worker::Worker;
+use map_reduce_core::worker_runtime::WorkerRuntime;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 
@@ -26,7 +26,7 @@ fn map_logic(data: &[String], targets: &[String]) -> HashMap<String, i32> {
 
 /// Work assignment for a mapper - describes what chunk to process
 #[derive(Clone)]
-pub struct WorkAssignment {
+pub struct MapWorkAssignment {
     pub chunk_id: usize,
     pub data: Vec<String>,
     pub targets: Vec<String>,
@@ -37,7 +37,7 @@ pub struct WorkAssignment {
 pub struct Mapper<S, W, R, SD>
 where
     S: StateAccess,
-    W: WorkChannel<WorkAssignment, mpsc::Sender<usize>>,
+    W: WorkChannel<MapWorkAssignment, mpsc::Sender<usize>>,
     R: WorkerRuntime,
     SD: ShutdownSignal,
 {
@@ -49,7 +49,7 @@ where
 impl<S, W, R, SD> Mapper<S, W, R, SD>
 where
     S: StateAccess,
-    W: WorkChannel<WorkAssignment, mpsc::Sender<usize>>,
+    W: WorkChannel<MapWorkAssignment, mpsc::Sender<usize>>,
     R: WorkerRuntime,
     SD: ShutdownSignal,
 {
@@ -57,7 +57,7 @@ where
         id: usize,
         state: S,
         shutdown_signal: SD,
-        work_rx: mpsc::Receiver<(WorkAssignment, mpsc::Sender<usize>)>,
+        work_rx: mpsc::Receiver<(MapWorkAssignment, mpsc::Sender<usize>)>,
         work_channel: W,
     ) -> Self {
         let handle = R::spawn(move || Self::run_task(id, work_rx, state, shutdown_signal));
@@ -72,7 +72,7 @@ where
     /// Sends a work assignment to the mapper
     pub fn send_map_assignment(
         &self,
-        assignment: WorkAssignment,
+        assignment: MapWorkAssignment,
         complete_tx: mpsc::Sender<usize>,
     ) {
         self.work_channel.send_work(assignment, complete_tx);
@@ -86,7 +86,7 @@ where
 
     async fn run_task(
         id: usize,
-        mut work_rx: mpsc::Receiver<(WorkAssignment, mpsc::Sender<usize>)>,
+        mut work_rx: mpsc::Receiver<(MapWorkAssignment, mpsc::Sender<usize>)>,
         state: S,
         shutdown_signal: SD,
     ) {
@@ -136,11 +136,11 @@ where
 impl<S, W, R, SD> Worker for Mapper<S, W, R, SD>
 where
     S: StateAccess,
-    W: WorkChannel<WorkAssignment, mpsc::Sender<usize>>,
+    W: WorkChannel<MapWorkAssignment, mpsc::Sender<usize>>,
     R: WorkerRuntime,
     SD: ShutdownSignal,
 {
-    type Assignment = WorkAssignment;
+    type Assignment = MapWorkAssignment;
     type Completion = mpsc::Sender<usize>;
     type Error = R::Error;
 

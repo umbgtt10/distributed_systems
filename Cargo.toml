@@ -1,5 +1,5 @@
 [workspace]
-members = [
-    "map-reduce"
-]
 resolver = "2"
+members = [
+    "map-reduce/core"
+]

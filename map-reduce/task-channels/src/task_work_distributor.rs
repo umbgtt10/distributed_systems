@@ -1,6 +1,6 @@
-use crate::completion_signaling::CompletionSignaling;
-use crate::work_distributor::WorkDistributor;
-use crate::worker::Worker;
+use map_reduce_core::completion_signaling::CompletionSignaling;
+use map_reduce_core::work_distributor::WorkDistributor;
+use map_reduce_core::worker::Worker;
 
 /// Implementation of WorkDistributor for async task-based workers
 /// Generic over the completion signaling mechanism

@@ -1,30 +1,23 @@
 mod channel_completion_signaling;
-mod completion_signaling;
 mod config;
 mod local_state_access;
 mod mapper;
-mod orchestrator;
+mod mpsc_work_channel;
 mod reducer;
-mod shutdown_signal;
-mod state_access;
 mod task_work_distributor;
 mod tokio_runtime;
-mod work_channel;
-mod work_distributor;
-mod worker;
-mod worker_runtime;
 
 use channel_completion_signaling::ChannelCompletionSignaling;
-use config::{Config, generate_random_string, generate_target_word};
+use config::{generate_random_string, generate_target_word, Config};
 use local_state_access::LocalStateAccess;
-use mapper::{Mapper, WorkAssignment};
-use orchestrator::Orchestrator;
-use reducer::{Reducer, ReducerAssignment};
-use state_access::StateAccess;
+use map_reduce_core::orchestrator::Orchestrator;
+use map_reduce_core::state_access::StateAccess;
+use mapper::{Mapper, MapWorkAssignment};
+use mpsc_work_channel::MpscWorkChannel;
+use reducer::{Reducer, ReduceWorkAssignment};
 use std::time::Instant;
 use task_work_distributor::TaskWorkDistributor;
-use tokio_runtime::{TokenShutdownSignal, TokioRuntime};
-use work_channel::MpscWorkChannel;
+use tokio_runtime::{TokioRuntime, TokenShutdownSignal};
 
 #[tokio::main]
 async fn main() {
@@ -72,21 +65,6 @@ async fn main() {
     let state = LocalStateAccess::new();
     state.initialize(targets.clone());
 
-    // Partition data into chunks based on partition_size
-    let mut data_chunks = Vec::new();
-    let num_partitions = data.len().div_ceil(config.partition_size);
-
-    for i in 0..num_partitions {
-        let start = i * config.partition_size;
-        let end = std::cmp::min(start + config.partition_size, data.len());
-        data_chunks.push(data[start..end].to_vec());
-    }
-
-    println!(
-        "Partitioned data into {} chunks for {} mappers",
-        data_chunks.len(),
-        config.num_mappers
-    );
     println!("\nStarting MapReduce...");
 
     // Create cancellation token
@@ -96,7 +74,7 @@ async fn main() {
     // Create mapper pool
     type MapperType = Mapper<
         LocalStateAccess,
-        MpscWorkChannel<WorkAssignment, tokio::sync::mpsc::Sender<usize>>,
+        MpscWorkChannel<MapWorkAssignment, tokio::sync::mpsc::Sender<usize>>,
         TokioRuntime,
         TokenShutdownSignal,
     >;
@@ -117,7 +95,7 @@ async fn main() {
     // Create reducer pool
     type ReducerType = Reducer<
         LocalStateAccess,
-        MpscWorkChannel<ReducerAssignment, tokio::sync::mpsc::Sender<usize>>,
+        MpscWorkChannel<ReduceWorkAssignment, tokio::sync::mpsc::Sender<usize>>,
         TokioRuntime,
         TokenShutdownSignal,
     >;
@@ -152,13 +130,47 @@ async fn main() {
         ctrl_c_token.cancel();
     });
 
-    // Run the orchestrator
+    // Run the orchestrator with factory functions to create assignments
     orchestrator
         .run(
             mappers,
             reducers,
-            data_chunks,
+            // Mapper assignment factory
+            |data, targets, partition_size| {
+                let num_partitions = data.len().div_ceil(partition_size);
+                let mut data_chunks = Vec::new();
+                for i in 0..num_partitions {
+                    let start = i * partition_size;
+                    let end = std::cmp::min(start + partition_size, data.len());
+                    data_chunks.push(data[start..end].to_vec());
+                }
+                data_chunks
+                    .into_iter()
+                    .enumerate()
+                    .map(|(chunk_id, data)| MapWorkAssignment {
+                        chunk_id,
+                        data,
+                        targets: targets.clone(),
+                    })
+                    .collect()
+            },
+            // Reducer assignment factory
+            |targets, keys_per_reducer| {
+                let num_key_partitions = targets.len().div_ceil(keys_per_reducer);
+                let mut key_partitions = Vec::new();
+                for partition_id in 0..num_key_partitions {
+                    let start = partition_id * keys_per_reducer;
+                    let end = std::cmp::min(start + keys_per_reducer, targets.len());
+                    key_partitions.push(targets[start..end].to_vec());
+                }
+                key_partitions
+                    .into_iter()
+                    .map(|keys| ReduceWorkAssignment { keys })
+                    .collect()
+            },
+            data,
             targets,
+            config.partition_size,
             config.keys_per_reducer,
         )
         .await;

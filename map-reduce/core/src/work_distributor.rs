@@ -15,10 +15,11 @@ pub trait WorkDistributor: Send {
     /// - Assigns initial work
     /// - Waits for completions and reassigns dynamically
     /// - Waits for all workers to finish
-    async fn distribute(
+    fn distribute(
         &mut self,
         workers: Vec<Self::Worker>,
         assignments: Vec<<Self::Worker as Worker>::Assignment>,
-    ) where
+    ) -> impl std::future::Future<Output = ()> + Send
+    where
         <Self::Worker as Worker>::Assignment: Clone;
 }

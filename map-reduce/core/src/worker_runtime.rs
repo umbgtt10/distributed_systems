@@ -10,5 +10,7 @@ pub trait WorkerRuntime: Send + 'static {
         Fut: std::future::Future<Output = ()> + Send + 'static;
 
     /// Wait for the worker to complete
-    async fn join(handle: Self::Handle) -> Result<(), Self::Error>;
+    fn join(
+        handle: Self::Handle,
+    ) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
 }

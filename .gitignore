@@ -1,1 +1,9 @@
+# Rust build artifacts
 /target
+**/target/
+
+# Cargo.lock for libraries (keep for binaries)
+# Cargo.lock
+
+# Debug symbols
+**/*.pdb

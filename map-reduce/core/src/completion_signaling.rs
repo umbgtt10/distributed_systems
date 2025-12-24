@@ -12,5 +12,5 @@ pub trait CompletionSignaling: Send {
 
     /// Wait for the next worker to complete
     /// Returns the worker_id that completed, or None if all are done
-    async fn wait_next(&mut self) -> Option<usize>;
+    fn wait_next(&mut self) -> impl std::future::Future<Output = Option<usize>> + Send;
 }

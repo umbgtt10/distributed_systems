@@ -10,5 +10,5 @@ pub trait Worker: Send {
     fn send_work(&self, assignment: Self::Assignment, complete_tx: Self::Completion);
 
     /// Wait for the worker to shut down
-    async fn wait(self) -> Result<(), Self::Error>;
+    fn wait(self) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
 }

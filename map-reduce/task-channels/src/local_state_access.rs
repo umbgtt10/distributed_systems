@@ -1,4 +1,4 @@
-use crate::state_access::StateAccess;
+use map_reduce_core::state_access::StateAccess;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
