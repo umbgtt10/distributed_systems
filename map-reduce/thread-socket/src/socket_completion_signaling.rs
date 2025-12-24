@@ -27,9 +27,10 @@ impl SocketCompletionSignaling {
 
         for i in 0..num_workers {
             // Use port 0 to let OS assign an available port
-            let listener = TcpListener::bind("127.0.0.1:0")
-                .expect("Failed to bind completion listener");
-            let actual_port = listener.local_addr()
+            let listener =
+                TcpListener::bind("127.0.0.1:0").expect("Failed to bind completion listener");
+            let actual_port = listener
+                .local_addr()
                 .expect("Failed to get local address")
                 .port();
 
@@ -49,10 +50,12 @@ impl SocketCompletionSignaling {
     }
 
     pub fn get_sender(&self, worker_id: usize) -> CompletionSender {
-        let port = self.ports.get(&worker_id)
+        let port = self
+            .ports
+            .get(&worker_id)
             .copied()
             .expect("Invalid worker_id");
-        CompletionSender { port }
+        CompletionSender { port, worker_id }
     }
 }
 
@@ -68,20 +71,20 @@ impl CompletionSignaling for SocketCompletionSignaling {
     }
 
     async fn wait_next(&mut self) -> Option<Result<usize, usize>> {
-        let start = std::time::Instant::now();
-        let timeout = Duration::from_secs(5);
-
         loop {
-            if start.elapsed() > timeout {
-                return None;
-            }
-
             {
                 let listeners_guard = self.listeners.lock().unwrap();
-                for (_worker_id, listener) in listeners_guard.iter() {
+                for (worker_id, listener) in listeners_guard.iter() {
+                    let worker_id = *worker_id;
                     match listener.accept() {
                         Ok((mut stream, _)) => {
                             drop(listeners_guard);
+
+                            // Set stream to blocking mode for reading
+                            if stream.set_nonblocking(false).is_err() {
+                                return None;
+                            }
+
                             let mut len_bytes = [0u8; 4];
                             if stream.read_exact(&mut len_bytes).is_ok() {
                                 let len = u32::from_be_bytes(len_bytes) as usize;
@@ -119,6 +122,9 @@ impl CompletionSignaling for SocketCompletionSignaling {
             while start.elapsed() < Duration::from_millis(50) {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // Set blocking mode for reading
+                        let _ = stream.set_nonblocking(false);
+
                         let mut len_bytes = [0u8; 4];
                         if stream.read_exact(&mut len_bytes).is_ok() {
                             let len = u32::from_be_bytes(len_bytes) as usize;
@@ -140,6 +146,7 @@ impl CompletionSignaling for SocketCompletionSignaling {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CompletionSender {
     port: u16,
+    worker_id: usize,
 }
 
 impl CompletionSender {
@@ -147,20 +154,17 @@ impl CompletionSender {
         let addr = format!("127.0.0.1:{}", self.port);
         let message = match result {
             Ok(id) => CompletionMessage::Success(id),
-            Err(_) => CompletionMessage::Failure(0), // Will be filled by receiver
+            Err(_) => CompletionMessage::Failure(self.worker_id),
         };
-        if let Ok(mut stream) = TcpStream::connect(&addr) {
-            if let Ok(serialized) = serde_json::to_vec(&message) {
-                let len = serialized.len() as u32;
-                let _ = stream.write_all(&len.to_be_bytes());
-                let _ = stream.write_all(&serialized);
+        match TcpStream::connect(&addr) {
+            Ok(mut stream) => {
+                if let Ok(serialized) = serde_json::to_vec(&message) {
+                    let len = serialized.len() as u32;
+                    let _ = stream.write_all(&len.to_be_bytes());
+                    let _ = stream.write_all(&serialized);
+                }
             }
+            Err(_) => {}
         }
-    }
-}
-
-impl From<CompletionSender> for Result<usize, ()> {
-    fn from(_sender: CompletionSender) -> Self {
-        Ok(0) // Placeholder
     }
 }

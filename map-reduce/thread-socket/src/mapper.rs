@@ -1,3 +1,5 @@
+use crate::socket_completion_signaling::CompletionSender;
+use crate::socket_work_channel::SocketWorkReceiver;
 use map_reduce_core::map_reduce_problem::MapReduceProblem;
 use map_reduce_core::shutdown_signal::ShutdownSignal;
 use map_reduce_core::state_access::StateAccess;
@@ -10,8 +12,6 @@ use std::marker::PhantomData;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::thread;
 use std::time::Duration;
-use crate::socket_completion_signaling::CompletionSender;
-use crate::socket_work_channel::SocketWorkReceiver;
 
 /// Mapper worker using threads
 pub struct Mapper<P, S, W, R, SD>
@@ -117,9 +117,7 @@ where
 
                 match result {
                     Ok(_) => {
-                        if id % 5 == 0 {
-                            println!("Mapper {} finished work", id);
-                        }
+                        println!("Mapper {} finished work", id);
                         completion_sender.send(Ok(id));
                     }
                     Err(_) => {

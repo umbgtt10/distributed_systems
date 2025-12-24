@@ -51,7 +51,7 @@ where
     ) -> Vec<W>
     where
         W::Assignment: Clone,
-        C: Into<W::Completion>,
+        W::Completion: From<C>,
     {
         if assignments.is_empty() {
             return workers;
@@ -79,61 +79,67 @@ where
 
         // Process completions and reassignments
         while active_workers > 0 {
-            // Check for stragglers if timeout is configured AND we have more work to assign
-            // No point killing stragglers if we have no new work for them
+            // Check for stragglers if timeout is configured
             if let Some(timeout_duration) = self.timeout {
-                if assignment_index < assignments.len() {
-                    let mut stragglers = Vec::new();
-                    for (worker_id, info) in &worker_assignments {
-                        if info.start_time.elapsed() > timeout_duration {
-                            stragglers.push(*worker_id);
-                        }
+                let mut stragglers = Vec::new();
+                for (worker_id, info) in &worker_assignments {
+                    if info.start_time.elapsed() > timeout_duration {
+                        stragglers.push(*worker_id);
                     }
+                }
 
-                    // Handle stragglers
-                    for worker_id in stragglers {
-                        if let Some(info) = worker_assignments.remove(&worker_id) {
-                            eprintln!(
-                                "⏱️  Worker {} is a straggler (timeout exceeded)! Respawning and reassigning work...",
-                                worker_id
-                            );
+                // Handle stragglers
+                for worker_id in stragglers {
+                    if let Some(info) = worker_assignments.remove(&worker_id) {
+                        eprintln!(
+                            "⏱️  Worker {} is a straggler (timeout exceeded)! Respawning and reassigning work...",
+                            worker_id
+                        );
 
-                            // Replace worker
-                            let failed_worker = mem::replace(
-                                &mut workers[worker_id],
-                                (self.worker_factory)(worker_id),
-                            );
-                            drop(failed_worker);
+                        // Replace worker
+                        let failed_worker =
+                            mem::replace(&mut workers[worker_id], (self.worker_factory)(worker_id));
+                        drop(failed_worker);
 
-                            // Drain pending messages
-                            signaling.drain_worker(worker_id).await;
+                        // Drain pending messages
+                        signaling.drain_worker(worker_id).await;
 
-                            // Reassign work
-                            let completion = get_completion(&signaling, worker_id);
-                            workers[worker_id]
-                                .send_work(info.assignment.clone(), completion.into());
-                            worker_assignments.insert(
-                                worker_id,
-                                AssignmentInfo {
-                                    assignment: info.assignment,
-                                    start_time: Instant::now(),
-                                },
-                            );
-                        }
+                        // Reassign work
+                        let completion = get_completion(&signaling, worker_id);
+                        workers[worker_id].send_work(info.assignment.clone(), completion.into());
+                        worker_assignments.insert(
+                            worker_id,
+                            AssignmentInfo {
+                                assignment: info.assignment,
+                                start_time: Instant::now(),
+                            },
+                        );
                     }
                 }
             }
 
-            // Wait for completion with a small timeout to allow straggler checks
-            let wait_duration = self
-                .timeout
-                .map(|t| t / 10)
-                .unwrap_or(Duration::from_secs(60));
+            // Wait for completion
+            // If we have timeout configured, use short timeout to check stragglers
+            // Otherwise wait indefinitely for completion
+            let use_timeout = self.timeout.is_some();
 
-            // Use tokio timeout for async wait
-            if let Ok(Some(result)) =
-                tokio::time::timeout(wait_duration, signaling.wait_next()).await
-            {
+            let completion_result = if use_timeout {
+                let wait_duration = self.timeout.unwrap() / 10;
+
+                // Use timeout to periodically check for stragglers
+                match tokio::time::timeout(wait_duration, signaling.wait_next()).await {
+                    Ok(result) => result,
+                    Err(_) => {
+                        // Timeout occurred - loop will check for stragglers
+                        continue;
+                    }
+                }
+            } else {
+                // No timeout needed - just wait for next completion
+                signaling.wait_next().await
+            };
+
+            if let Some(result) = completion_result {
                 match result {
                     Ok(worker_id) => {
                         // Worker completed successfully
@@ -158,7 +164,7 @@ where
                     }
                     Err(worker_id) => {
                         // Worker failed - respawn and reassign
-                        println!(
+                        eprintln!(
                             "⚠️  Worker {} failed! Respawning and reassigning work...",
                             worker_id
                         );
