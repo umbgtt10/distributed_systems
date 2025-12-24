@@ -2,7 +2,9 @@ use crate::completion_signaling::CompletionSignaling;
 use crate::shutdown_signal::ShutdownSignal;
 use crate::worker::Worker;
 use crate::worker_factory::WorkerFactory;
+use std::cmp::max;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::mem;
 use std::time::{Duration, Instant};
 
@@ -23,7 +25,7 @@ where
 {
     worker_factory: F,
     timeout: Option<Duration>,
-    _phantom: std::marker::PhantomData<(W, CS)>,
+    _phantom: PhantomData<(W, CS)>,
 }
 
 impl<W, CS, F> Executor<W, CS, F>
@@ -40,7 +42,7 @@ where
             } else {
                 None
             },
-            _phantom: std::marker::PhantomData,
+            _phantom: PhantomData,
         }
     }
 }
@@ -147,7 +149,7 @@ where
                 .map(|t| t / 10)
                 .unwrap_or(Duration::from_millis(100));
             // Ensure minimum wait duration to avoid busy loop
-            let wait_duration = std::cmp::max(wait_duration, Duration::from_millis(10));
+            let wait_duration = max(wait_duration, Duration::from_millis(10));
 
             match tokio::time::timeout(wait_duration, signaling.wait_next()).await {
                 Ok(completion_result) => {

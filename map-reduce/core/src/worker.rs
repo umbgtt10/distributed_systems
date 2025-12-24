@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::future::Future;
 
 /// Trait for workers (mappers and reducers) to abstract communication mechanism
 pub trait Worker: Send {
@@ -10,5 +11,5 @@ pub trait Worker: Send {
     fn send_work(&self, assignment: Self::Assignment, complete_tx: Self::Completion);
 
     /// Wait for the worker to shut down
-    fn wait(self) -> impl std::future::Future<Output = Result<(), Self::Error>> + Send;
+    fn wait(self) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }

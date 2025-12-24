@@ -6,7 +6,7 @@ use map_reduce_core::shutdown_signal::ShutdownSignal;
 use map_reduce_core::state_access::StateAccess;
 use map_reduce_core::worker_factory::WorkerFactory;
 use map_reduce_core::worker_runtime::WorkerRuntime;
-
+use std::marker::PhantomData;
 pub type Mapper<P, S, W, R, SD> = map_reduce_core::mapper::Mapper<
     P,
     S,
@@ -23,7 +23,7 @@ pub struct MapperFactory<P, S, R, SD> {
     failure_prob: u32,
     straggler_prob: u32,
     straggler_delay: u64,
-    _phantom: std::marker::PhantomData<(P, R)>,
+    _phantom: PhantomData<(P, R)>,
 }
 
 impl<P, S, R, SD> MapperFactory<P, S, R, SD> {
@@ -40,7 +40,7 @@ impl<P, S, R, SD> MapperFactory<P, S, R, SD> {
             failure_prob,
             straggler_prob,
             straggler_delay,
-            _phantom: std::marker::PhantomData,
+            _phantom: PhantomData,
         }
     }
 }

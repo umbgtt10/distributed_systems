@@ -1,5 +1,6 @@
 use map_reduce_core::map_reduce_job::MapReduceJob;
 use map_reduce_core::state_access::StateAccess;
+use std::cmp::min;
 use std::collections::HashMap;
 
 /// Word search problem definition - searches for target words in text data
@@ -41,7 +42,7 @@ impl MapReduceJob for WordSearchProblem {
 
         for i in 0..num_partitions {
             let start = i * partition_size;
-            let end = std::cmp::min(start + partition_size, data.len());
+            let end = min(start + partition_size, data.len());
             data_chunks.push(data[start..end].to_vec());
         }
 
@@ -66,7 +67,7 @@ impl MapReduceJob for WordSearchProblem {
 
         for partition_id in 0..num_key_partitions {
             let start = partition_id * keys_per_reducer;
-            let end = std::cmp::min(start + keys_per_reducer, targets.len());
+            let end = min(start + keys_per_reducer, targets.len());
             key_partitions.push(targets[start..end].to_vec());
         }
 

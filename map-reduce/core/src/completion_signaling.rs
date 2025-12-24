@@ -1,3 +1,5 @@
+use std::future::Future;
+
 /// Trait for abstracting completion signaling mechanisms
 /// This allows different implementations for tasks, threads, and processes
 pub trait CompletionSignaling: Send {
@@ -15,12 +17,12 @@ pub trait CompletionSignaling: Send {
     /// Returns None if all workers are done
     fn wait_next(
         &mut self,
-    ) -> impl std::future::Future<Output = Option<Result<usize, usize>>> + Send;
+    ) -> impl Future<Output = Option<Result<usize, usize>>> + Send;
 
     /// Reset the signaling mechanism for a specific worker
     /// This drains any pending messages and returns a new token for the new worker
     fn reset_worker(
         &mut self,
         worker_id: usize,
-    ) -> impl std::future::Future<Output = Self::Token> + Send;
+    ) -> impl Future<Output = Self::Token> + Send;
 }
