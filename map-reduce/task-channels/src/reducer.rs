@@ -37,8 +37,10 @@ where
         work_rx: mpsc::Receiver<(P::ReduceAssignment, mpsc::Sender<Result<usize, ()>>)>,
         work_channel: W,
         failure_probability: u32,
+        straggler_probability: u32,
+        straggler_delay_ms: u64,
     ) -> Self {
-        let handle = R::spawn(move || Self::run_task(id, work_rx, state, shutdown_signal, failure_probability));
+        let handle = R::spawn(move || Self::run_task(id, work_rx, state, shutdown_signal, failure_probability, straggler_probability, straggler_delay_ms));
 
         Self {
             work_channel,
@@ -53,16 +55,14 @@ where
         state: S,
         shutdown_signal: SD,
         failure_probability: u32,
+        straggler_probability: u32,
+        straggler_delay_ms: u64,
     ) {
         loop {
             tokio::select! {
                 work = work_rx.recv() => {
                     match work {
                         Some((assignment, complete_tx)) => {
-                            if id.is_multiple_of(2) {
-                                println!("Reducer {} started work", id);
-                            }
-
                             // Check for cancellation
                             if shutdown_signal.is_cancelled() {
                                 println!("Reducer {} cancelled", id);
@@ -83,6 +83,16 @@ where
                                 continue;
                             }
 
+                            // Simulate straggler (slow worker) with random delay
+                            if straggler_probability > 0 {
+                                let random_value = rand::rng().random_range(0..100);
+                                if random_value < straggler_probability {
+                                    let delay = rand::rng().random_range(1..=straggler_delay_ms);
+                                    eprintln!("🐌 Reducer {} is a straggler! Delaying {}ms", id, delay);
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
+                                }
+                            }
+
                             // Execute problem-specific reduce work with error handling
                             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                                 P::reduce_work(&assignment, &state);
@@ -90,9 +100,7 @@ where
 
                             match result {
                                 Ok(_) => {
-                                    if id.is_multiple_of(2) {
-                                        println!("Reducer {} finished", id);
-                                    }
+                                    println!("Reducer {} finished", id);
                                     // Notify orchestrator of success
                                     let _ = complete_tx.send(Ok(id)).await;
                                 }

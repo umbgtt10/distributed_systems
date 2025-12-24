@@ -16,4 +16,8 @@ pub trait CompletionSignaling: Send {
     fn wait_next(
         &mut self,
     ) -> impl std::future::Future<Output = Option<Result<usize, usize>>> + Send;
+
+    /// Drain any pending completion messages from a specific worker
+    /// This is necessary when killing/replacing a worker to avoid stale messages
+    fn drain_worker(&mut self, worker_id: usize) -> impl std::future::Future<Output = ()> + Send;
 }

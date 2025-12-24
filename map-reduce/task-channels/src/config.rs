@@ -18,6 +18,22 @@ pub struct Config {
     /// Probability (0-100) that a reducer fails during execution
     #[serde(default)]
     pub reducer_failure_probability: u32,
+    /// Maximum allowed execution time for a mapper in milliseconds (0 = no timeout)
+    #[serde(default)]
+    pub mapper_timeout_ms: u64,
+    /// Maximum allowed execution time for a reducer in milliseconds (0 = no timeout)
+    #[serde(default)]
+    pub reducer_timeout_ms: u64,
+    /// Probability (0-100) that a worker becomes a straggler (slow)
+    #[serde(default)]
+    pub straggler_probability: u32,
+    /// Maximum delay in milliseconds for a straggler
+    #[serde(default = "default_straggler_delay")]
+    pub straggler_delay_ms: u64,
+}
+
+fn default_straggler_delay() -> u64 {
+    1000
 }
 
 impl Config {
@@ -39,6 +55,10 @@ impl Config {
             num_reducers: 10,
             mapper_failure_probability: 0,
             reducer_failure_probability: 0,
+            mapper_timeout_ms: 0,
+            reducer_timeout_ms: 0,
+            straggler_probability: 0,
+            straggler_delay_ms: 1000,
         }
     }
 }
