@@ -5,6 +5,7 @@ members = [
     "word-search",
     "task-channels",
     "thread-socket",
+    "process-rpc",
 ]
 
 [workspace.dependencies]

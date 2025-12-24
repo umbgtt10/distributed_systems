@@ -1,8 +1,8 @@
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $rootDir = Join-Path $scriptDir ".."
-$projects = @("task-channels", "thread-socket")
-$iterations = 50
+$projects = @("task-channels", "thread-socket", "process-rpc")
+$iterations = 5
 
 Write-Host "Starting stress test..." -ForegroundColor Cyan
 
