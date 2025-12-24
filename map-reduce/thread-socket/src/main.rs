@@ -1,11 +1,10 @@
-mod config;
 mod mapper;
 mod reducer;
 mod socket_completion_signaling;
 mod socket_work_channel;
 mod thread_runtime;
 
-use config::Config;
+use map_reduce_core::config::Config;
 use map_reduce_core::local_state_access::LocalStateAccess;
 use map_reduce_core::completion_signaling::CompletionSignaling;
 use map_reduce_core::default_phase_executor::DefaultPhaseExecutor;

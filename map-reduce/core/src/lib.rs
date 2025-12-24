@@ -1,4 +1,5 @@
 pub mod completion_signaling;
+pub mod config;
 pub mod default_phase_executor;
 pub mod local_state_access;
 pub mod map_reduce_problem;

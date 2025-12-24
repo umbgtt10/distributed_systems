@@ -1,6 +1,5 @@
 mod channel_completion_signaling;
 mod channel_wrappers;
-mod config;
 mod mapper;
 mod mpsc_work_channel;
 mod reducer;
@@ -8,7 +7,7 @@ mod tokio_runtime;
 
 use channel_completion_signaling::ChannelCompletionSignaling;
 use channel_wrappers::{ChannelCompletionSender, ChannelWorkReceiver};
-use config::Config;
+use map_reduce_core::config::Config;
 use map_reduce_core::local_state_access::LocalStateAccess;
 use map_reduce_core::completion_signaling::CompletionSignaling;
 use map_reduce_core::default_phase_executor::DefaultPhaseExecutor;

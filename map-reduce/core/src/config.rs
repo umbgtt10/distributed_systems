@@ -1,7 +1,7 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     pub num_strings: usize,
     pub max_string_length: usize,
@@ -47,8 +47,10 @@ impl Config {
         let config: Config = serde_json::from_str(&contents)?;
         Ok(config)
     }
+}
 
-    pub fn default() -> Self {
+impl Default for Config {
+    fn default() -> Self {
         Self {
             num_strings: 1_000_000,
             max_string_length: 20,
