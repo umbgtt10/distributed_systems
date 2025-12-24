@@ -12,8 +12,8 @@ struct AssignmentInfo<A> {
     start_time: Instant,
 }
 
-/// Socket-based work distributor
-pub struct SocketWorkDistributor<W, F>
+/// Socket-based phase executor
+pub struct SocketPhaseExecutor<W, F>
 where
     W: Worker,
     F: FnMut(usize) -> W + Send,
@@ -23,7 +23,7 @@ where
     _phantom: std::marker::PhantomData<W>,
 }
 
-impl<W, F> SocketWorkDistributor<W, F>
+impl<W, F> SocketPhaseExecutor<W, F>
 where
     W: Worker<Completion = CompletionSender>,
     W::Assignment: Clone,
@@ -41,7 +41,7 @@ where
         }
     }
 
-    pub fn distribute_work<SD: ShutdownSignal>(
+    pub fn execute<SD: ShutdownSignal>(
         &mut self,
         mut workers: Vec<W>,
         assignments: Vec<W::Assignment>,

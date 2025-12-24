@@ -11,13 +11,12 @@ use config::{generate_random_string, generate_target_word, Config};
 use local_state_access::LocalStateAccess;
 use map_reduce_core::map_reduce_problem::MapReduceProblem;
 use map_reduce_core::state_access::StateAccess;
-use map_reduce_core::worker::Worker;
 use map_reduce_word_search::{WordSearchContext, WordSearchProblem};
 use mapper::Mapper;
 use reducer::Reducer;
 use socket_completion_signaling::{CompletionSender, SocketCompletionSignaling};
 use socket_work_channel::SocketWorkChannel;
-use socket_work_distributor::SocketWorkDistributor;
+use socket_work_distributor::SocketPhaseExecutor;
 use std::time::Instant;
 use thread_runtime::{AtomicShutdownSignal, ThreadRuntime};
 
@@ -183,9 +182,9 @@ fn main() {
         )
     };
 
-    // Create mapper distributor
-    let mut mapper_distributor =
-        SocketWorkDistributor::with_timeout(mapper_factory, config.mapper_timeout_ms);
+    // Create mapper executor
+    let mut mapper_executor =
+        SocketPhaseExecutor::with_timeout(mapper_factory, config.mapper_timeout_ms);
 
     // Create reducers
     let mut reducer_port = config.reducer_base_port;
@@ -228,9 +227,9 @@ fn main() {
         )
     };
 
-    // Create reducer distributor
-    let mut reducer_distributor =
-        SocketWorkDistributor::with_timeout(reducer_factory, config.reducer_timeout_ms);
+    // Create reducer executor
+    let mut reducer_executor =
+        SocketPhaseExecutor::with_timeout(reducer_factory, config.reducer_timeout_ms);
 
     // Run map phase
     println!("\n=== MAP PHASE ===");
@@ -240,7 +239,7 @@ fn main() {
     };
     let map_assignments =
         WordSearchProblem::create_map_assignments(data, context.clone(), config.partition_size);
-    let mappers = mapper_distributor.distribute_work(
+    let mappers = mapper_executor.execute(
         mappers,
         map_assignments,
         &mapper_signaling,
@@ -253,7 +252,7 @@ fn main() {
     println!("Starting {} reducers...", config.num_reducers);
     let reduce_assignments =
         WordSearchProblem::create_reduce_assignments(context, config.keys_per_reducer);
-    let reducers = reducer_distributor.distribute_work(
+    let reducers = reducer_executor.execute(
         reducers,
         reduce_assignments,
         &reducer_signaling,

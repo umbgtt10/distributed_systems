@@ -1,5 +1,5 @@
 use map_reduce_core::completion_signaling::CompletionSignaling;
-use map_reduce_core::work_distributor::WorkDistributor;
+use map_reduce_core::phase_executor::PhaseExecutor;
 use map_reduce_core::worker::Worker;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -14,11 +14,11 @@ struct AssignmentInfo<A> {
     start_time: Instant,
 }
 
-/// Implementation of WorkDistributor for async task-based workers
+/// Implementation of PhaseExecutor for async task-based workers
 /// Generic over the completion signaling mechanism
 /// Supports fault tolerance: respawns failed workers and reassigns work
 /// Supports straggler detection: timeouts and preemptive reassignment
-pub struct TaskWorkDistributor<W: Worker, CS: CompletionSignaling, F>
+pub struct TaskPhaseExecutor<W: Worker, CS: CompletionSignaling, F>
 where
     F: FnMut(usize) -> W,
 {
@@ -27,7 +27,7 @@ where
     _phantom: PhantomData<(W, CS)>,
 }
 
-impl<W: Worker, CS: CompletionSignaling, F> TaskWorkDistributor<W, CS, F>
+impl<W: Worker, CS: CompletionSignaling, F> TaskPhaseExecutor<W, CS, F>
 where
     F: FnMut(usize) -> W + Send,
 {
@@ -44,7 +44,7 @@ where
     }
 }
 
-impl<W, CS, F> WorkDistributor for TaskWorkDistributor<W, CS, F>
+impl<W, CS, F> PhaseExecutor for TaskPhaseExecutor<W, CS, F>
 where
     W: Worker,
     CS: CompletionSignaling,
@@ -53,7 +53,7 @@ where
 {
     type Worker = W;
 
-    async fn distribute(
+    async fn execute(
         &mut self,
         mut workers: Vec<Self::Worker>,
         assignments: Vec<<Self::Worker as Worker>::Assignment>,

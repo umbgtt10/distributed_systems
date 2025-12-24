@@ -1,7 +1,7 @@
 {
   "num_strings": 500000,
   "max_string_length": 15,
-  "num_target_words": 1000,
+  "num_target_words": 100,
   "target_word_length": 3,
   "partition_size": 5000,
   "keys_per_reducer": 2,

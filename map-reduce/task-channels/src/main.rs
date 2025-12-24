@@ -11,14 +11,14 @@ use channel_completion_signaling::{ChannelCompletionSignaling, CompletionMessage
 use config::{generate_random_string, generate_target_word, Config};
 use local_state_access::LocalStateAccess;
 use map_reduce_core::map_reduce_problem::MapReduceProblem;
-use map_reduce_core::orchestrator::Orchestrator;
+use map_reduce_core::phase_executor::PhaseExecutor;
 use map_reduce_core::state_access::StateAccess;
 use map_reduce_word_search::{WordSearchContext, WordSearchProblem};
 use mapper::Mapper;
 use mpsc_work_channel::MpscWorkChannel;
 use reducer::Reducer;
 use std::time::Instant;
-use task_work_distributor::TaskWorkDistributor;
+use task_work_distributor::TaskPhaseExecutor;
 use tokio::sync::mpsc::Sender;
 use tokio::{signal, spawn};
 use tokio_runtime::{TokenShutdownSignal, TokioRuntime};
@@ -222,20 +222,17 @@ async fn main() {
         reducers.push(reducer);
     }
 
-    // Create work distributors with factories and timeouts
-    let mapper_distributor = TaskWorkDistributor::<MapperType, ChannelCompletionSignaling, _>::new(
+    // Create phase executors with factories and timeouts
+    let mut mapper_executor = TaskPhaseExecutor::<MapperType, ChannelCompletionSignaling, _>::new(
         mapper_factory,
         config.mapper_timeout_ms,
     );
 
-    let reducer_distributor =
-        TaskWorkDistributor::<ReducerType, ChannelCompletionSignaling, _>::new(
+    let mut reducer_executor =
+        TaskPhaseExecutor::<ReducerType, ChannelCompletionSignaling, _>::new(
             reducer_factory,
             config.reducer_timeout_ms,
         );
-
-    // Create orchestrator with the distributors
-    let orchestrator = Orchestrator::new(mapper_distributor, reducer_distributor);
 
     // Setup Ctrl+C handler
     let ctrl_c_token = cancel_token.clone();
@@ -245,27 +242,26 @@ async fn main() {
         ctrl_c_token.cancel();
     });
 
-    // Run the orchestrator with factory functions from the problem
+    // Create problem context
     let context = WordSearchContext {
         targets: targets.clone(),
     };
 
-    orchestrator
-        .run(
-            mappers,
-            reducers,
-            |data, context, partition_size| {
-                WordSearchProblem::create_map_assignments(data, context, partition_size)
-            },
-            |context, keys_per_reducer| {
-                WordSearchProblem::create_reduce_assignments(context, keys_per_reducer)
-            },
-            data,
-            context,
-            config.partition_size,
-            config.keys_per_reducer,
-        )
-        .await;
+    // Execute map phase
+    println!("\n=== MAP PHASE ===");
+    println!("Distributing data to {} mappers...", config.num_mappers);
+    let map_assignments =
+        WordSearchProblem::create_map_assignments(data, context.clone(), config.partition_size);
+    mapper_executor.execute(mappers, map_assignments).await;
+    println!("All mappers completed!");
+
+    // Execute reduce phase
+    println!("\n=== REDUCE PHASE ===");
+    println!("Starting {} reducers...", config.num_reducers);
+    let reduce_assignments =
+        WordSearchProblem::create_reduce_assignments(context, config.keys_per_reducer);
+    reducer_executor.execute(reducers, reduce_assignments).await;
+    println!("All reducers completed!");
 
     // Extract final results from state
     let final_results_map = state.get_map();
