@@ -1,4 +1,5 @@
 mod channel_completion_signaling;
+mod channel_wrappers;
 mod config;
 mod local_state_access;
 mod mapper;
@@ -6,7 +7,8 @@ mod mpsc_work_channel;
 mod reducer;
 mod tokio_runtime;
 
-use channel_completion_signaling::{ChannelCompletionSignaling, CompletionMessage};
+use channel_completion_signaling::ChannelCompletionSignaling;
+use channel_wrappers::{ChannelCompletionSender, ChannelWorkReceiver};
 use config::Config;
 use local_state_access::LocalStateAccess;
 use map_reduce_core::completion_signaling::CompletionSignaling;
@@ -19,7 +21,6 @@ use mapper::Mapper;
 use mpsc_work_channel::MpscWorkChannel;
 use reducer::Reducer;
 use std::time::Instant;
-use tokio::sync::mpsc::Sender;
 use tokio::{signal, spawn};
 use tokio_runtime::{TokenShutdownSignal, TokioRuntime};
 use tokio_util::sync::CancellationToken;
@@ -121,7 +122,7 @@ async fn main() {
         LocalStateAccess,
         MpscWorkChannel<
             <WordSearchProblem as MapReduceProblem>::MapAssignment,
-            Sender<CompletionMessage>,
+            ChannelCompletionSender,
         >,
         TokioRuntime,
         TokenShutdownSignal,
@@ -136,13 +137,14 @@ async fn main() {
     let mapper_factory = move |mapper_id: usize| -> MapperType {
         let (work_channel, work_rx) = MpscWorkChannel::<
             <WordSearchProblem as MapReduceProblem>::MapAssignment,
-            Sender<CompletionMessage>,
+            ChannelCompletionSender,
         >::create_pair(10);
+        let wrapped_rx = ChannelWorkReceiver { rx: work_rx };
         Mapper::new(
             mapper_id,
             state_for_mapper.clone(),
             shutdown_for_mapper.clone(),
-            work_rx,
+            wrapped_rx,
             work_channel,
             mapper_failure_prob,
             mapper_straggler_prob,
@@ -154,11 +156,12 @@ async fn main() {
     let mut mappers: Vec<MapperType> = Vec::new();
     for mapper_id in 0..config.num_mappers {
         let (work_channel, work_rx) = MpscWorkChannel::create_pair(10);
+        let wrapped_rx = ChannelWorkReceiver { rx: work_rx };
         let mapper = Mapper::new(
             mapper_id,
             state.clone(),
             shutdown_signal.clone(),
-            work_rx,
+            wrapped_rx,
             work_channel,
             config.mapper_failure_probability,
             config.mapper_straggler_probability,
@@ -173,7 +176,7 @@ async fn main() {
         LocalStateAccess,
         MpscWorkChannel<
             <WordSearchProblem as MapReduceProblem>::ReduceAssignment,
-            Sender<CompletionMessage>,
+            ChannelCompletionSender,
         >,
         TokioRuntime,
         TokenShutdownSignal,
@@ -188,13 +191,14 @@ async fn main() {
     let reducer_factory = move |reducer_id: usize| -> ReducerType {
         let (work_channel, work_rx) = MpscWorkChannel::<
             <WordSearchProblem as MapReduceProblem>::ReduceAssignment,
-            Sender<CompletionMessage>,
+            ChannelCompletionSender,
         >::create_pair(10);
+        let wrapped_rx = ChannelWorkReceiver { rx: work_rx };
         Reducer::new(
             reducer_id,
             state_for_reducer.clone(),
             shutdown_for_reducer.clone(),
-            work_rx,
+            wrapped_rx,
             work_channel,
             reducer_failure_prob,
             reducer_straggler_prob,
@@ -207,13 +211,14 @@ async fn main() {
     for reducer_id in 0..config.num_reducers {
         let (work_channel, work_rx) = MpscWorkChannel::<
             <WordSearchProblem as MapReduceProblem>::ReduceAssignment,
-            Sender<CompletionMessage>,
+            ChannelCompletionSender,
         >::create_pair(10);
+        let wrapped_rx = ChannelWorkReceiver { rx: work_rx };
         let reducer = Reducer::new(
             reducer_id,
             state.clone(),
             shutdown_signal.clone(),
-            work_rx,
+            wrapped_rx,
             work_channel,
             config.reducer_failure_probability,
             config.reducer_straggler_probability,
@@ -275,6 +280,10 @@ async fn main() {
         )
         .await;
     println!("All reducers completed!");
+
+    // Initiate shutdown
+    println!("\n=== SHUTTING DOWN ===");
+    cancel_token.cancel();
 
     // Wait for all workers to shut down
     for (idx, worker) in mappers.into_iter().enumerate() {

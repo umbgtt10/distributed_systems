@@ -42,16 +42,16 @@ where
         }
     }
 
-    pub async fn execute<C>(
+    pub async fn execute(
         &mut self,
         mut workers: Vec<W>,
         assignments: Vec<W::Assignment>,
         mut signaling: CS,
-        get_completion: impl Fn(&CS, usize) -> C,
+        get_completion: impl Fn(&CS, usize) -> CS::Token,
     ) -> Vec<W>
     where
         W::Assignment: Clone,
-        W::Completion: From<C>,
+        W::Completion: From<CS::Token>,
     {
         if assignments.is_empty() {
             return workers;
@@ -101,12 +101,13 @@ where
                             mem::replace(&mut workers[worker_id], (self.worker_factory)(worker_id));
                         drop(failed_worker);
 
-                        // Drain pending messages
+                        // Drain pending messages and replace signaling token
                         signaling.drain_worker(worker_id).await;
+                        let completion_token = signaling.replace_worker(worker_id);
 
                         // Reassign work
-                        let completion = get_completion(&signaling, worker_id);
-                        workers[worker_id].send_work(info.assignment.clone(), completion.into());
+                        workers[worker_id]
+                            .send_work(info.assignment.clone(), completion_token.into());
                         worker_assignments.insert(
                             worker_id,
                             AssignmentInfo {
@@ -177,13 +178,13 @@ where
                             );
                             drop(failed_worker);
 
-                            // Drain pending messages
+                            // Drain pending messages and replace signaling token
                             signaling.drain_worker(worker_id).await;
+                            let completion_token = signaling.replace_worker(worker_id);
 
                             // Reassign work
-                            let completion = get_completion(&signaling, worker_id);
                             workers[worker_id]
-                                .send_work(info.assignment.clone(), completion.into());
+                                .send_work(info.assignment.clone(), completion_token.into());
                             worker_assignments.insert(
                                 worker_id,
                                 AssignmentInfo {

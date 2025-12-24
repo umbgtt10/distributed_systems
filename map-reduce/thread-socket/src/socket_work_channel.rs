@@ -1,10 +1,13 @@
+use async_trait::async_trait;
 use map_reduce_core::work_channel::WorkChannel;
+use map_reduce_core::worker_io::AsyncWorkReceiver;
 use serde::{Deserialize, Serialize};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::marker::PhantomData;
-use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::thread;
+use tokio::io::AsyncReadExt;
+use tokio::net::TcpListener;
 
 /// Socket-based work channel
 #[derive(Clone)]
@@ -16,8 +19,16 @@ pub struct SocketWorkChannel<A, C> {
 impl<A, C> SocketWorkChannel<A, C> {
     pub fn create_pair(port: u16) -> (Self, SocketWorkReceiver<A, C>) {
         let addr = format!("127.0.0.1:{}", port);
-        let listener = TcpListener::bind(&addr).expect("Failed to bind");
-        let actual_addr = listener.local_addr().expect("Failed to get local address");
+        let std_listener = std::net::TcpListener::bind(&addr).expect("Failed to bind");
+        std_listener
+            .set_nonblocking(true)
+            .expect("Failed to set nonblocking");
+        let actual_addr = std_listener
+            .local_addr()
+            .expect("Failed to get local address");
+
+        let listener = TcpListener::from_std(std_listener).expect("Failed to convert listener");
+
         let channel = Self {
             addr: Arc::new(actual_addr.to_string()),
             _phantom: PhantomData,
@@ -38,7 +49,7 @@ where
     fn send_work(&self, assignment: A, completion: C) {
         let addr = self.addr.clone();
         thread::spawn(move || {
-            if let Ok(mut stream) = TcpStream::connect(addr.as_str()) {
+            if let Ok(mut stream) = std::net::TcpStream::connect(addr.as_str()) {
                 let message = (assignment, completion);
                 if let Ok(serialized) = serde_json::to_vec(&message) {
                     let len = serialized.len() as u32;
@@ -56,18 +67,19 @@ pub struct SocketWorkReceiver<A, C> {
     _phantom: PhantomData<(A, C)>,
 }
 
-impl<A, C> SocketWorkReceiver<A, C>
+#[async_trait]
+impl<A, C> AsyncWorkReceiver<A, C> for SocketWorkReceiver<A, C>
 where
-    A: for<'de> Deserialize<'de>,
-    C: for<'de> Deserialize<'de>,
+    A: for<'de> Deserialize<'de> + Send,
+    C: for<'de> Deserialize<'de> + Send,
 {
-    pub fn recv(&self) -> Option<(A, C)> {
-        if let Ok((mut stream, _)) = self.listener.accept() {
+    async fn recv(&mut self) -> Option<(A, C)> {
+        if let Ok((mut stream, _)) = self.listener.accept().await {
             let mut len_bytes = [0u8; 4];
-            if stream.read_exact(&mut len_bytes).is_ok() {
+            if stream.read_exact(&mut len_bytes).await.is_ok() {
                 let len = u32::from_be_bytes(len_bytes) as usize;
                 let mut buffer = vec![0u8; len];
-                if stream.read_exact(&mut buffer).is_ok() {
+                if stream.read_exact(&mut buffer).await.is_ok() {
                     if let Ok(message) = serde_json::from_slice(&buffer) {
                         return Some(message);
                     }
@@ -75,9 +87,5 @@ where
             }
         }
         None
-    }
-
-    pub fn set_nonblocking(&self, nonblocking: bool) -> std::io::Result<()> {
-        self.listener.set_nonblocking(nonblocking)
     }
 }

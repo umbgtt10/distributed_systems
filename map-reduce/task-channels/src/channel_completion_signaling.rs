@@ -1,3 +1,4 @@
+use crate::channel_wrappers::ChannelCompletionSender;
 use map_reduce_core::completion_signaling::CompletionSignaling;
 use tokio::sync::mpsc::{self, Sender};
 use tokio_stream::wrappers::ReceiverStream;
@@ -13,7 +14,7 @@ pub struct ChannelCompletionSignaling {
 }
 
 impl CompletionSignaling for ChannelCompletionSignaling {
-    type Token = Sender<CompletionMessage>;
+    type Token = ChannelCompletionSender;
 
     fn setup(num_workers: usize) -> Self {
         let mut completion_txs = Vec::new();
@@ -32,7 +33,23 @@ impl CompletionSignaling for ChannelCompletionSignaling {
     }
 
     fn get_token(&self, worker_id: usize) -> Self::Token {
-        self.completion_txs[worker_id].clone()
+        ChannelCompletionSender {
+            tx: self.completion_txs[worker_id].clone(),
+        }
+    }
+
+    fn replace_worker(&mut self, worker_id: usize) -> Self::Token {
+        // Remove old stream
+        self.completion_streams.remove(&worker_id);
+
+        // Create new channel
+        let (tx, rx) = mpsc::channel::<CompletionMessage>(10);
+
+        // Update tx and stream
+        self.completion_txs[worker_id] = tx;
+        self.completion_streams.insert(worker_id, ReceiverStream::new(rx));
+
+        self.get_token(worker_id)
     }
 
     async fn wait_next(&mut self) -> Option<Result<usize, usize>> {

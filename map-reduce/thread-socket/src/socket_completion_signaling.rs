@@ -1,10 +1,9 @@
+use async_trait::async_trait;
 use map_reduce_core::completion_signaling::CompletionSignaling;
+use map_reduce_core::worker_io::AsyncCompletionSender;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::Write;
-use std::net::TcpStream;
-use std::sync::Arc;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_stream::{StreamExt, StreamMap};
@@ -19,7 +18,7 @@ pub enum CompletionMessage {
 /// Socket-based completion signaling
 pub struct SocketCompletionSignaling {
     listeners: StreamMap<usize, TcpListenerStream>,
-    ports: Arc<HashMap<usize, u16>>,
+    ports: HashMap<usize, u16>,
 }
 
 impl SocketCompletionSignaling {
@@ -49,7 +48,7 @@ impl SocketCompletionSignaling {
 
         Self {
             listeners,
-            ports: Arc::new(ports),
+            ports,
         }
     }
 
@@ -71,6 +70,32 @@ impl CompletionSignaling for SocketCompletionSignaling {
     }
 
     fn get_token(&self, worker_id: usize) -> Self::Token {
+        self.get_sender(worker_id)
+    }
+
+    fn replace_worker(&mut self, worker_id: usize) -> Self::Token {
+        // Remove old listener (closes socket)
+        self.listeners.remove(&worker_id);
+
+        // Create new listener
+        let std_listener =
+            std::net::TcpListener::bind("127.0.0.1:0").expect("Failed to bind completion listener");
+        std_listener
+            .set_nonblocking(true)
+            .expect("Failed to set nonblocking");
+        let actual_port = std_listener
+            .local_addr()
+            .expect("Failed to get local address")
+            .port();
+
+        let tokio_listener =
+            TcpListener::from_std(std_listener).expect("Failed to convert to tokio listener");
+        let stream = TcpListenerStream::new(tokio_listener);
+
+        // Insert new listener and update port
+        self.listeners.insert(worker_id, stream);
+        self.ports.insert(worker_id, actual_port);
+
         self.get_sender(worker_id)
     }
 
@@ -129,22 +154,27 @@ pub struct CompletionSender {
     worker_id: usize,
 }
 
-impl CompletionSender {
-    pub fn send(&self, result: Result<usize, ()>) {
+#[async_trait]
+impl AsyncCompletionSender for CompletionSender {
+    async fn send(&self, result: Result<usize, ()>) -> bool {
         let addr = format!("127.0.0.1:{}", self.port);
         let message = match result {
             Ok(id) => CompletionMessage::Success(id),
             Err(_) => CompletionMessage::Failure(self.worker_id),
         };
-        match TcpStream::connect(&addr) {
+        match tokio::net::TcpStream::connect(&addr).await {
             Ok(mut stream) => {
                 if let Ok(serialized) = serde_json::to_vec(&message) {
                     let len = serialized.len() as u32;
-                    let _ = stream.write_all(&len.to_be_bytes());
-                    let _ = stream.write_all(&serialized);
+                    if stream.write_all(&len.to_be_bytes()).await.is_ok() {
+                        if stream.write_all(&serialized).await.is_ok() {
+                            return true;
+                        }
+                    }
                 }
             }
             Err(_) => {}
         }
+        false
     }
 }
