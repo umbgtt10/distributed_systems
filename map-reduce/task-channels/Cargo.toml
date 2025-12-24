@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 map-reduce-core = { path = "../core" }
+map-reduce-word-search = { path = "../word-search" }
 tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
 tokio-stream = "0.1"

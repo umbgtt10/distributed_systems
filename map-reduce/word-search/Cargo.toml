@@ -1,0 +1,7 @@
+[package]
+name = "map-reduce-word-search"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+map-reduce-core = { path = "../core" }

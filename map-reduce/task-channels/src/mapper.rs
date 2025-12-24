@@ -1,55 +1,31 @@
+use map_reduce_core::map_reduce_problem::MapReduceProblem;
 use map_reduce_core::shutdown_signal::ShutdownSignal;
 use map_reduce_core::state_access::StateAccess;
 use map_reduce_core::work_channel::WorkChannel;
 use map_reduce_core::worker::Worker;
 use map_reduce_core::worker_runtime::WorkerRuntime;
-use std::collections::HashMap;
 use tokio::sync::mpsc;
 
-/// Pure business logic for mapping phase
-/// Searches for target words in data and returns counts
-fn map_logic(data: &[String], targets: &[String]) -> HashMap<String, i32> {
-    let mut results = HashMap::new();
-
-    for target in targets {
-        let mut count = 0;
-        for text in data {
-            if text.contains(target) {
-                count += 1;
-            }
-        }
-        results.insert(target.clone(), count);
-    }
-
-    results
-}
-
-/// Work assignment for a mapper - describes what chunk to process
-#[derive(Clone)]
-pub struct MapWorkAssignment {
-    pub chunk_id: usize,
-    pub data: Vec<String>,
-    pub targets: Vec<String>,
-}
-
-/// Mapper worker that searches for target words in its data chunk
-/// Generic over state access, work channel, runtime, and shutdown mechanism
-pub struct Mapper<S, W, R, SD>
+/// Mapper worker that executes map work for a given problem
+/// Generic over problem type, state access, work channel, runtime, and shutdown mechanism
+pub struct Mapper<P, S, W, R, SD>
 where
+    P: MapReduceProblem,
     S: StateAccess,
-    W: WorkChannel<MapWorkAssignment, mpsc::Sender<usize>>,
+    W: WorkChannel<P::MapAssignment, mpsc::Sender<usize>>,
     R: WorkerRuntime,
     SD: ShutdownSignal,
 {
     work_channel: W,
     task_handle: R::Handle,
-    _phantom: std::marker::PhantomData<(S, SD)>,
+    _phantom: std::marker::PhantomData<(P, S, SD)>,
 }
 
-impl<S, W, R, SD> Mapper<S, W, R, SD>
+impl<P, S, W, R, SD> Mapper<P, S, W, R, SD>
 where
+    P: MapReduceProblem,
     S: StateAccess,
-    W: WorkChannel<MapWorkAssignment, mpsc::Sender<usize>>,
+    W: WorkChannel<P::MapAssignment, mpsc::Sender<usize>>,
     R: WorkerRuntime,
     SD: ShutdownSignal,
 {
@@ -57,7 +33,7 @@ where
         id: usize,
         state: S,
         shutdown_signal: SD,
-        work_rx: mpsc::Receiver<(MapWorkAssignment, mpsc::Sender<usize>)>,
+        work_rx: mpsc::Receiver<(P::MapAssignment, mpsc::Sender<usize>)>,
         work_channel: W,
     ) -> Self {
         let handle = R::spawn(move || Self::run_task(id, work_rx, state, shutdown_signal));
@@ -69,15 +45,6 @@ where
         }
     }
 
-    /// Sends a work assignment to the mapper
-    pub fn send_map_assignment(
-        &self,
-        assignment: MapWorkAssignment,
-        complete_tx: mpsc::Sender<usize>,
-    ) {
-        self.work_channel.send_work(assignment, complete_tx);
-    }
-
     /// Waits for the mapper task to complete
     pub async fn wait(self) -> Result<(), R::Error> {
         drop(self.work_channel); // Close the channel to signal task to exit
@@ -86,7 +53,7 @@ where
 
     async fn run_task(
         id: usize,
-        mut work_rx: mpsc::Receiver<(MapWorkAssignment, mpsc::Sender<usize>)>,
+        mut work_rx: mpsc::Receiver<(P::MapAssignment, mpsc::Sender<usize>)>,
         state: S,
         shutdown_signal: SD,
     ) {
@@ -96,7 +63,7 @@ where
                     match work {
                         Some((assignment, complete_tx)) => {
                             if id.is_multiple_of(10) {
-                                println!("Mapper {} processing chunk {}", id, assignment.chunk_id);
+                                println!("Mapper {} processing work", id);
                             }
 
                             // Check for cancellation
@@ -105,18 +72,11 @@ where
                                 return;
                             }
 
-                            // Use pure business logic
-                            let results = map_logic(&assignment.data, &assignment.targets);
-
-                            // Write results to state
-                            for (target, count) in results {
-                                if count > 0 {
-                                    state.update(target, count);
-                                }
-                            }
+                            // Execute problem-specific map work
+                            P::map_work(&assignment, &state);
 
                             if id.is_multiple_of(10) {
-                                println!("Mapper {} finished chunk {}", id, assignment.chunk_id);
+                                println!("Mapper {} finished work", id);
                             }
 
                             // Notify orchestrator that this mapper is done
@@ -133,19 +93,20 @@ where
     }
 }
 
-impl<S, W, R, SD> Worker for Mapper<S, W, R, SD>
+impl<P, S, W, R, SD> Worker for Mapper<P, S, W, R, SD>
 where
+    P: MapReduceProblem,
     S: StateAccess,
-    W: WorkChannel<MapWorkAssignment, mpsc::Sender<usize>>,
+    W: WorkChannel<P::MapAssignment, mpsc::Sender<usize>>,
     R: WorkerRuntime,
     SD: ShutdownSignal,
 {
-    type Assignment = MapWorkAssignment;
+    type Assignment = P::MapAssignment;
     type Completion = mpsc::Sender<usize>;
     type Error = R::Error;
 
     fn send_work(&self, assignment: Self::Assignment, complete_tx: Self::Completion) {
-        self.send_map_assignment(assignment, complete_tx);
+        self.work_channel.send_work(assignment, complete_tx);
     }
 
     async fn wait(self) -> Result<(), Self::Error> {

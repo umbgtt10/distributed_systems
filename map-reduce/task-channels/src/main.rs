@@ -10,11 +10,13 @@ mod tokio_runtime;
 use channel_completion_signaling::ChannelCompletionSignaling;
 use config::{generate_random_string, generate_target_word, Config};
 use local_state_access::LocalStateAccess;
+use map_reduce_core::map_reduce_problem::MapReduceProblem;
 use map_reduce_core::orchestrator::Orchestrator;
 use map_reduce_core::state_access::StateAccess;
-use mapper::{Mapper, MapWorkAssignment};
+use map_reduce_word_search::{WordSearchProblem, WordSearchContext};
+use mapper::Mapper;
 use mpsc_work_channel::MpscWorkChannel;
-use reducer::{Reducer, ReduceWorkAssignment};
+use reducer::Reducer;
 use std::time::Instant;
 use task_work_distributor::TaskWorkDistributor;
 use tokio_runtime::{TokioRuntime, TokenShutdownSignal};
@@ -73,8 +75,9 @@ async fn main() {
 
     // Create mapper pool
     type MapperType = Mapper<
+        WordSearchProblem,
         LocalStateAccess,
-        MpscWorkChannel<MapWorkAssignment, tokio::sync::mpsc::Sender<usize>>,
+        MpscWorkChannel<<WordSearchProblem as map_reduce_core::map_reduce_problem::MapReduceProblem>::MapAssignment, tokio::sync::mpsc::Sender<usize>>,
         TokioRuntime,
         TokenShutdownSignal,
     >;
@@ -94,8 +97,9 @@ async fn main() {
 
     // Create reducer pool
     type ReducerType = Reducer<
+        WordSearchProblem,
         LocalStateAccess,
-        MpscWorkChannel<ReduceWorkAssignment, tokio::sync::mpsc::Sender<usize>>,
+        MpscWorkChannel<<WordSearchProblem as map_reduce_core::map_reduce_problem::MapReduceProblem>::ReduceAssignment, tokio::sync::mpsc::Sender<usize>>,
         TokioRuntime,
         TokenShutdownSignal,
     >;
@@ -130,46 +134,21 @@ async fn main() {
         ctrl_c_token.cancel();
     });
 
-    // Run the orchestrator with factory functions to create assignments
+    // Run the orchestrator with factory functions from the problem
+    let context = WordSearchContext { targets: targets.clone() };
+
     orchestrator
         .run(
             mappers,
             reducers,
-            // Mapper assignment factory
-            |data, targets, partition_size| {
-                let num_partitions = data.len().div_ceil(partition_size);
-                let mut data_chunks = Vec::new();
-                for i in 0..num_partitions {
-                    let start = i * partition_size;
-                    let end = std::cmp::min(start + partition_size, data.len());
-                    data_chunks.push(data[start..end].to_vec());
-                }
-                data_chunks
-                    .into_iter()
-                    .enumerate()
-                    .map(|(chunk_id, data)| MapWorkAssignment {
-                        chunk_id,
-                        data,
-                        targets: targets.clone(),
-                    })
-                    .collect()
+            |data, context, partition_size| {
+                WordSearchProblem::create_map_assignments(data, context, partition_size)
             },
-            // Reducer assignment factory
-            |targets, keys_per_reducer| {
-                let num_key_partitions = targets.len().div_ceil(keys_per_reducer);
-                let mut key_partitions = Vec::new();
-                for partition_id in 0..num_key_partitions {
-                    let start = partition_id * keys_per_reducer;
-                    let end = std::cmp::min(start + keys_per_reducer, targets.len());
-                    key_partitions.push(targets[start..end].to_vec());
-                }
-                key_partitions
-                    .into_iter()
-                    .map(|keys| ReduceWorkAssignment { keys })
-                    .collect()
+            |context, keys_per_reducer| {
+                WordSearchProblem::create_reduce_assignments(context, keys_per_reducer)
             },
             data,
-            targets,
+            context,
             config.partition_size,
             config.keys_per_reducer,
         )

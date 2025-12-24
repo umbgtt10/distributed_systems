@@ -74,12 +74,20 @@ name = "map-reduce-task-channels"
 version = "0.1.0"
 dependencies = [
  "map-reduce-core",
+ "map-reduce-word-search",
  "rand",
  "serde",
  "serde_json",
  "tokio",
  "tokio-stream",
  "tokio-util",
+]
+
+[[package]]
+name = "map-reduce-word-search"
+version = "0.1.0"
+dependencies = [
+ "map-reduce-core",
 ]
 
 [[package]]

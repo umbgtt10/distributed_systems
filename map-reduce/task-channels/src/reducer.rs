@@ -1,3 +1,4 @@
+use map_reduce_core::map_reduce_problem::MapReduceProblem;
 use map_reduce_core::shutdown_signal::ShutdownSignal;
 use map_reduce_core::state_access::StateAccess;
 use map_reduce_core::work_channel::WorkChannel;
@@ -5,36 +6,26 @@ use map_reduce_core::worker::Worker;
 use map_reduce_core::worker_runtime::WorkerRuntime;
 use tokio::sync::mpsc;
 
-/// Pure business logic for reduce phase
-/// Sums all values for a given key
-fn reduce_logic(values: Vec<i32>) -> i32 {
-    values.into_iter().sum()
-}
-
-/// Reducer assignment - which keys this reducer is responsible for
-#[derive(Clone)]
-pub struct ReduceWorkAssignment {
-    pub keys: Vec<String>,
-}
-
-/// Reducer worker that sums up vectors into final counts
-/// Generic over state access, work channel, runtime, and shutdown mechanism
-pub struct Reducer<S, W, R, SD>
+/// Reducer worker that executes reduce work for a given problem
+/// Generic over problem type, state access, work channel, runtime, and shutdown mechanism
+pub struct Reducer<P, S, W, R, SD>
 where
+    P: MapReduceProblem,
     S: StateAccess,
-    W: WorkChannel<ReduceWorkAssignment, mpsc::Sender<usize>>,
+    W: WorkChannel<P::ReduceAssignment, mpsc::Sender<usize>>,
     R: WorkerRuntime,
     SD: ShutdownSignal,
 {
     work_channel: W,
     task_handle: R::Handle,
-    _phantom: std::marker::PhantomData<(S, SD)>,
+    _phantom: std::marker::PhantomData<(P, S, SD)>,
 }
 
-impl<S, W, R, SD> Reducer<S, W, R, SD>
+impl<P, S, W, R, SD> Reducer<P, S, W, R, SD>
 where
+    P: MapReduceProblem,
     S: StateAccess,
-    W: WorkChannel<ReduceWorkAssignment, mpsc::Sender<usize>>,
+    W: WorkChannel<P::ReduceAssignment, mpsc::Sender<usize>>,
     R: WorkerRuntime,
     SD: ShutdownSignal,
 {
@@ -42,7 +33,7 @@ where
         id: usize,
         state: S,
         shutdown_signal: SD,
-        work_rx: mpsc::Receiver<(ReduceWorkAssignment, mpsc::Sender<usize>)>,
+        work_rx: mpsc::Receiver<(P::ReduceAssignment, mpsc::Sender<usize>)>,
         work_channel: W,
     ) -> Self {
         let handle = R::spawn(move || Self::run_task(id, work_rx, state, shutdown_signal));
@@ -56,7 +47,7 @@ where
 
     async fn run_task(
         id: usize,
-        mut work_rx: mpsc::Receiver<(ReduceWorkAssignment, mpsc::Sender<usize>)>,
+        mut work_rx: mpsc::Receiver<(P::ReduceAssignment, mpsc::Sender<usize>)>,
         state: S,
         shutdown_signal: SD,
     ) {
@@ -66,7 +57,7 @@ where
                     match work {
                         Some((assignment, complete_tx)) => {
                             if id.is_multiple_of(2) {
-                                println!("Reducer {} started for {} keys", id, assignment.keys.len());
+                                println!("Reducer {} started work", id);
                             }
 
                             // Check for cancellation
@@ -75,16 +66,8 @@ where
                                 return;
                             }
 
-                            for key in assignment.keys {
-                                // Get the vector for this key
-                                let values = state.get(&key);
-
-                                // Use pure business logic to reduce
-                                let count = reduce_logic(values);
-
-                                // Update state with final count (replacing the vector)
-                                state.replace(key, count);
-                            }
+                            // Execute problem-specific reduce work
+                            P::reduce_work(&assignment, &state);
 
                             if id.is_multiple_of(2) {
                                 println!("Reducer {} finished", id);
@@ -103,15 +86,6 @@ where
         }
     }
 
-    /// Sends a work assignment to the reducer
-    pub fn send_reduce_assignment(
-        &self,
-        assignment: ReduceWorkAssignment,
-        complete_tx: mpsc::Sender<usize>,
-    ) {
-        self.work_channel.send_work(assignment, complete_tx);
-    }
-
     /// Waits for the reducer task to complete
     pub async fn wait(self) -> Result<(), R::Error> {
         drop(self.work_channel); // Close the channel to signal task to exit
@@ -119,19 +93,20 @@ where
     }
 }
 
-impl<S, W, R, SD> Worker for Reducer<S, W, R, SD>
+impl<P, S, W, R, SD> Worker for Reducer<P, S, W, R, SD>
 where
+    P: MapReduceProblem,
     S: StateAccess,
-    W: WorkChannel<ReduceWorkAssignment, mpsc::Sender<usize>>,
+    W: WorkChannel<P::ReduceAssignment, mpsc::Sender<usize>>,
     R: WorkerRuntime,
     SD: ShutdownSignal,
 {
-    type Assignment = ReduceWorkAssignment;
+    type Assignment = P::ReduceAssignment;
     type Completion = mpsc::Sender<usize>;
     type Error = R::Error;
 
     fn send_work(&self, assignment: Self::Assignment, complete_tx: Self::Completion) {
-        self.send_reduce_assignment(assignment, complete_tx);
+        self.work_channel.send_work(assignment, complete_tx);
     }
 
     async fn wait(self) -> Result<(), Self::Error> {

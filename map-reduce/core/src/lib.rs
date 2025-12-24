@@ -1,4 +1,5 @@
 pub mod completion_signaling;
+pub mod map_reduce_problem;
 pub mod orchestrator;
 pub mod shutdown_signal;
 pub mod state_access;

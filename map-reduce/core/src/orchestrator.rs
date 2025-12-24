@@ -16,16 +16,16 @@ impl<MD: WorkDistributor, RD: WorkDistributor> Orchestrator<MD, RD> {
     }
 
     /// Runs the complete map-reduce workflow
-    /// Generic over assignment types - implementations provide concrete types
+    /// Generic over assignment types and context - implementations provide concrete types
     #[allow(clippy::too_many_arguments)]
-    pub async fn run<MA, RA>(
+    pub async fn run<MA, RA, I, C>(
         mut self,
         mappers: Vec<MD::Worker>,
         reducers: Vec<RD::Worker>,
-        create_mapper_assignments: impl FnOnce(Vec<String>, Vec<String>, usize) -> Vec<MA>,
-        create_reducer_assignments: impl FnOnce(Vec<String>, usize) -> Vec<RA>,
-        data: Vec<String>,
-        targets: Vec<String>,
+        create_mapper_assignments: impl FnOnce(I, C, usize) -> Vec<MA>,
+        create_reducer_assignments: impl FnOnce(C, usize) -> Vec<RA>,
+        data: I,
+        context: C,
         partition_size: usize,
         keys_per_reducer: usize,
     ) where
@@ -33,6 +33,7 @@ impl<MD: WorkDistributor, RD: WorkDistributor> Orchestrator<MD, RD> {
         RD::Worker: crate::worker::Worker<Assignment = RA>,
         MA: Clone,
         RA: Clone,
+        C: Clone,
     {
         println!("=== ORCHESTRATOR STARTED ===");
 
@@ -41,7 +42,7 @@ impl<MD: WorkDistributor, RD: WorkDistributor> Orchestrator<MD, RD> {
         println!("Distributing data to {} mappers...", mappers.len());
 
         // Create mapper assignments using factory function
-        let mapper_assignments = create_mapper_assignments(data, targets.clone(), partition_size);
+        let mapper_assignments = create_mapper_assignments(data, context.clone(), partition_size);
 
         // Distribute work to mappers
         self.mapper_distributor
@@ -53,16 +54,8 @@ impl<MD: WorkDistributor, RD: WorkDistributor> Orchestrator<MD, RD> {
         println!("\n=== REDUCE PHASE ===");
         println!("Starting {} reducers...", reducers.len());
 
-        // Partition the keys among reducers based on keys_per_reducer
-        let num_key_partitions = targets.len().div_ceil(keys_per_reducer);
-        println!(
-            "Distributing {} key partitions to {} reducers...",
-            num_key_partitions,
-            reducers.len()
-        );
-
         // Create reducer assignments using factory function
-        let reducer_assignments = create_reducer_assignments(targets, keys_per_reducer);
+        let reducer_assignments = create_reducer_assignments(context, keys_per_reducer);
 
         // Distribute work to reducers
         self.reducer_distributor
