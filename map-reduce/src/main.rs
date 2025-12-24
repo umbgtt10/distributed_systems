@@ -1,12 +1,14 @@
 mod channel_completion_signaling;
 mod completion_signaling;
 mod config;
-mod map_reduce_logic;
+mod local_state_access;
 mod mapper;
 mod orchestrator;
 mod reducer;
+mod shutdown_signal;
 mod state_access;
 mod task_work_distributor;
+mod tokio_runtime;
 mod work_channel;
 mod work_distributor;
 mod worker;
@@ -14,14 +16,15 @@ mod worker_runtime;
 
 use channel_completion_signaling::ChannelCompletionSignaling;
 use config::{Config, generate_random_string, generate_target_word};
+use local_state_access::LocalStateAccess;
 use mapper::{Mapper, WorkAssignment};
 use orchestrator::Orchestrator;
 use reducer::{Reducer, ReducerAssignment};
-use state_access::{LocalStateAccess, StateAccess};
+use state_access::StateAccess;
 use std::time::Instant;
 use task_work_distributor::TaskWorkDistributor;
+use tokio_runtime::{TokenShutdownSignal, TokioRuntime};
 use work_channel::MpscWorkChannel;
-use worker_runtime::{TokenShutdownSignal, TokioRuntime};
 
 #[tokio::main]
 async fn main() {

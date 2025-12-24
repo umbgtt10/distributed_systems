@@ -1,9 +1,28 @@
-use crate::map_reduce_logic::map_logic;
+use crate::shutdown_signal::ShutdownSignal;
 use crate::state_access::StateAccess;
 use crate::work_channel::WorkChannel;
 use crate::worker::Worker;
-use crate::worker_runtime::{ShutdownSignal, WorkerRuntime};
+use crate::worker_runtime::WorkerRuntime;
+use std::collections::HashMap;
 use tokio::sync::mpsc;
+
+/// Pure business logic for mapping phase
+/// Searches for target words in data and returns counts
+fn map_logic(data: &[String], targets: &[String]) -> HashMap<String, i32> {
+    let mut results = HashMap::new();
+
+    for target in targets {
+        let mut count = 0;
+        for text in data {
+            if text.contains(target) {
+                count += 1;
+            }
+        }
+        results.insert(target.clone(), count);
+    }
+
+    results
+}
 
 /// Work assignment for a mapper - describes what chunk to process
 #[derive(Clone)]

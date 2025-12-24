@@ -1,9 +1,15 @@
-use crate::map_reduce_logic::reduce_logic;
+use crate::shutdown_signal::ShutdownSignal;
 use crate::state_access::StateAccess;
 use crate::work_channel::WorkChannel;
 use crate::worker::Worker;
-use crate::worker_runtime::{ShutdownSignal, WorkerRuntime};
+use crate::worker_runtime::WorkerRuntime;
 use tokio::sync::mpsc;
+
+/// Pure business logic for reduce phase
+/// Sums all values for a given key
+fn reduce_logic(values: Vec<i32>) -> i32 {
+    values.into_iter().sum()
+}
 
 /// Reducer assignment - which keys this reducer is responsible for
 #[derive(Clone)]
