@@ -4,7 +4,7 @@ use map_reduce_core::map_reduce_problem::MapReduceProblem;
 use map_reduce_core::reducer::ReducerTask;
 use map_reduce_core::shutdown_signal::ShutdownSignal;
 use map_reduce_core::state_access::StateAccess;
-use map_reduce_core::worker::WorkerFactory;
+use map_reduce_core::worker_factory::WorkerFactory;
 use map_reduce_core::worker_runtime::WorkerRuntime;
 
 pub type Reducer<P, S, W, R, SD> = map_reduce_core::reducer::Reducer<

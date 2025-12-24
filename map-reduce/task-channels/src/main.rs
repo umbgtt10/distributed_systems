@@ -10,7 +10,6 @@ use channel_wrappers::ChannelCompletionSender;
 use map_reduce_core::config::Config;
 use map_reduce_core::local_state_access::LocalStateAccess;
 use map_reduce_core::map_reduce_problem::MapReduceProblem;
-use map_reduce_core::phase_executor::PhaseExecutor;
 use map_reduce_core::state_access::StateAccess;
 use map_reduce_core::utils::{generate_test_data, initialize_phase};
 use map_reduce_word_search::{WordSearchContext, WordSearchProblem};

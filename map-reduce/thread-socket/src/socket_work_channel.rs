@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use map_reduce_core::work_channel::WorkChannel;
-use map_reduce_core::worker_io::AsyncWorkReceiver;
+use map_reduce_core::work_channel::WorkDistributor;
+use map_reduce_core::worker_io::WorkReceiver;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::marker::PhantomData;
@@ -41,7 +41,7 @@ impl<A, C> SocketWorkChannel<A, C> {
     }
 }
 
-impl<A, C> WorkChannel<A, C> for SocketWorkChannel<A, C>
+impl<A, C> WorkDistributor<A, C> for SocketWorkChannel<A, C>
 where
     A: Clone + Send + Serialize + 'static,
     C: Clone + Send + Serialize + 'static,
@@ -68,7 +68,7 @@ pub struct SocketWorkReceiver<A, C> {
 }
 
 #[async_trait]
-impl<A, C> AsyncWorkReceiver<A, C> for SocketWorkReceiver<A, C>
+impl<A, C> WorkReceiver<A, C> for SocketWorkReceiver<A, C>
 where
     A: for<'de> Deserialize<'de> + Send,
     C: for<'de> Deserialize<'de> + Send,
@@ -89,3 +89,4 @@ where
         None
     }
 }
+

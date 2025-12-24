@@ -6,16 +6,14 @@ $iterations = 5
 
 Write-Host "Starting stress test..." -ForegroundColor Cyan
 
+# 1. Build all projects first
 foreach ($project in $projects) {
     $projectDir = Join-Path $rootDir $project
     Write-Host "`nBuilding Project: $project" -ForegroundColor Yellow
-    Write-Host "Directory: $projectDir"
 
     Push-Location $projectDir
-
-    # Build first to avoid compilation noise in the loop
     Write-Host "Building release version..."
-    cargo build --release
+    cargo build --release --quiet
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Build failed for $project"
         Pop-Location
@@ -24,6 +22,7 @@ foreach ($project in $projects) {
     Pop-Location
 }
 
+# 2. Run Stress Tests
 foreach ($project in $projects) {
     $projectDir = Join-Path $rootDir $project
     Write-Host "`nTesting Project: $project" -ForegroundColor Yellow
@@ -35,7 +34,6 @@ foreach ($project in $projects) {
 
         $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
-        # Run the binary directly using .NET Process for better control
         $binaryName = "map-reduce-$project.exe"
         $binaryPath = Join-Path $rootDir "target\release\$binaryName"
 
@@ -49,31 +47,63 @@ foreach ($project in $projects) {
         $p.StartInfo.FileName = $binaryPath
         $p.StartInfo.WorkingDirectory = $projectDir
         $p.StartInfo.UseShellExecute = $false
-        $p.StartInfo.CreateNoWindow = $false
+        $p.StartInfo.CreateNoWindow = $true
+        $p.StartInfo.RedirectStandardOutput = $true
+        $p.StartInfo.RedirectStandardError = $true
 
         $p.Start() | Out-Null
 
-        $timeoutSeconds = 15
+        # Use async readers to prevent deadlock
+        $outputReader = $p.StandardOutput
+        $errorReader = $p.StandardError
+
+        $outputTask = $outputReader.ReadToEndAsync()
+        $errorTask = $errorReader.ReadToEndAsync()
+
+        $timeoutSeconds = 30
         $startTime = [System.DateTime]::Now
 
         while (-not $p.HasExited) {
             if (([System.DateTime]::Now - $startTime).TotalSeconds -gt $timeoutSeconds) {
                 $sw.Stop()
-                Write-Host "TIMEOUT (>15s)" -ForegroundColor Red
-                try { $p.Kill() } catch {}
+                Write-Host "TIMEOUT (>30s)" -ForegroundColor Red
+                try {
+                    $p.Kill()
+                    $p.WaitForExit(1000)
+                } catch {}
+
+                # Try to get partial output
+                try {
+                    $output = if ($outputTask.IsCompleted) { $outputTask.Result } else { "" }
+                    $err = if ($errorTask.IsCompleted) { $errorTask.Result } else { "" }
+                    Write-Host "--- STDOUT ---" -ForegroundColor Gray
+                    Write-Host $output
+                    Write-Host "--- STDERR ---" -ForegroundColor Gray
+                    Write-Host $err
+                } catch {}
+
                 Pop-Location
                 exit 1
             }
             Start-Sleep -Milliseconds 100
         }
 
+        $p.WaitForExit()
         $sw.Stop()
         $exitCode = $p.ExitCode
+
+        # Wait for async reads to complete
+        $output = $outputTask.Result
+        $err = $errorTask.Result
 
         if ($exitCode -eq 0) {
             Write-Host "PASS ($($sw.Elapsed.TotalSeconds.ToString("N2"))s)" -ForegroundColor Green
         } else {
             Write-Host "FAIL (Exit Code: $exitCode)" -ForegroundColor Red
+            Write-Host "--- STDOUT ---" -ForegroundColor Gray
+            Write-Host $output
+            Write-Host "--- STDERR ---" -ForegroundColor Gray
+            Write-Host $err
             Pop-Location
             exit 1
         }

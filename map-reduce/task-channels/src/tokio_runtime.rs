@@ -1,5 +1,5 @@
 use map_reduce_core::shutdown_signal::ShutdownSignal;
-use map_reduce_core::worker_runtime::{Runnable, WorkerRuntime};
+use map_reduce_core::worker_runtime::{WorkerTask, WorkerRuntime};
 use tokio::task::{self, JoinError, JoinHandle};
 use tokio_util::sync::CancellationToken;
 
@@ -9,7 +9,7 @@ pub struct TokioRuntime;
 
 impl<T> WorkerRuntime<T> for TokioRuntime
 where
-    T: Runnable<Output = ()> + Send + 'static,
+    T: WorkerTask<Output = ()> + Send + 'static,
 {
     type Handle = JoinHandle<()>;
     type Error = JoinError;

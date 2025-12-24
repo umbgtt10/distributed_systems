@@ -1,9 +1,9 @@
 use crate::map_reduce_problem::MapReduceProblem;
 use crate::shutdown_signal::ShutdownSignal;
 use crate::state_access::StateAccess;
-use crate::work_channel::WorkChannel;
-use crate::worker_io::{AsyncCompletionSender, AsyncWorkReceiver};
-use crate::worker_runtime::{Runnable, WorkerRuntime};
+use crate::work_channel::WorkDistributor;
+use crate::worker_io::{CompletionSender, WorkReceiver};
+use crate::worker_runtime::{WorkerTask, WorkerRuntime};
 use async_trait::async_trait;
 use rand::Rng;
 use serde::de::DeserializeOwned;
@@ -29,13 +29,13 @@ pub struct MapperTask<P, S, SD, WR, CS> {
 }
 
 #[async_trait]
-impl<P, S, SD, WR, CS> Runnable for MapperTask<P, S, SD, WR, CS>
+impl<P, S, SD, WR, CS> WorkerTask for MapperTask<P, S, SD, WR, CS>
 where
     P: MapReduceProblem,
     S: StateAccess + Send + Sync + 'static,
     SD: ShutdownSignal + Send + 'static,
-    WR: AsyncWorkReceiver<P::MapAssignment, CS> + 'static,
-    CS: AsyncCompletionSender + 'static,
+    WR: WorkReceiver<P::MapAssignment, CS> + 'static,
+    CS: CompletionSender + 'static,
 {
     type Output = ();
 
@@ -110,11 +110,11 @@ pub struct Mapper<P, S, W, R, SD, WR, CS>
 where
     P: MapReduceProblem,
     S: StateAccess,
-    W: WorkChannel<P::MapAssignment, CS>,
+    W: WorkDistributor<P::MapAssignment, CS>,
     R: WorkerRuntime<MapperTask<P, S, SD, WR, CS>>,
     SD: ShutdownSignal,
-    WR: AsyncWorkReceiver<P::MapAssignment, CS>,
-    CS: AsyncCompletionSender,
+    WR: WorkReceiver<P::MapAssignment, CS>,
+    CS: CompletionSender,
 {
     work_channel: W,
     task_handle: R::Handle,
@@ -125,11 +125,11 @@ impl<P, S, W, R, SD, WR, CS> Mapper<P, S, W, R, SD, WR, CS>
 where
     P: MapReduceProblem,
     S: StateAccess + Send + Sync + 'static,
-    W: WorkChannel<P::MapAssignment, CS> + 'static,
+    W: WorkDistributor<P::MapAssignment, CS> + 'static,
     R: WorkerRuntime<MapperTask<P, S, SD, WR, CS>>,
     SD: ShutdownSignal + Send + 'static,
-    WR: AsyncWorkReceiver<P::MapAssignment, CS> + 'static,
-    CS: AsyncCompletionSender + 'static,
+    WR: WorkReceiver<P::MapAssignment, CS> + 'static,
+    CS: CompletionSender + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -171,11 +171,11 @@ impl<P, S, W, R, SD, WR, CS> crate::worker::Worker for Mapper<P, S, W, R, SD, WR
 where
     P: MapReduceProblem,
     S: StateAccess + Send + Sync + 'static,
-    W: WorkChannel<P::MapAssignment, CS> + 'static,
+    W: WorkDistributor<P::MapAssignment, CS> + 'static,
     R: WorkerRuntime<MapperTask<P, S, SD, WR, CS>>,
     SD: ShutdownSignal + Send + 'static,
-    WR: AsyncWorkReceiver<P::MapAssignment, CS> + 'static,
-    CS: AsyncCompletionSender + 'static,
+    WR: WorkReceiver<P::MapAssignment, CS> + 'static,
+    CS: CompletionSender + 'static,
 {
     type Assignment = P::MapAssignment;
     type Completion = CS;

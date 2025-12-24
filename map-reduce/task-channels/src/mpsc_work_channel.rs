@@ -1,4 +1,4 @@
-use map_reduce_core::work_channel::WorkChannel;
+use map_reduce_core::work_channel::WorkDistributor;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::task;
 
@@ -15,7 +15,7 @@ impl<A, C> MpscWorkChannel<A, C> {
     }
 }
 
-impl<A, C> WorkChannel<A, C> for MpscWorkChannel<A, C>
+impl<A, C> WorkDistributor<A, C> for MpscWorkChannel<A, C>
 where
     A: Clone + Send + 'static,
     C: Clone + Send + 'static,

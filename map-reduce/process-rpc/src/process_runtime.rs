@@ -1,4 +1,4 @@
-use map_reduce_core::worker_runtime::{Runnable, WorkerRuntime};
+use map_reduce_core::worker_runtime::{WorkerTask, WorkerRuntime};
 use serde::{de::DeserializeOwned, Serialize};
 use std::process::Stdio;
 use tokio::process::{Child, Command};
@@ -16,7 +16,7 @@ pub struct MapperProcessRuntime;
 
 impl<T> WorkerRuntime<T> for MapperProcessRuntime
 where
-    T: Runnable<Output = ()> + Serialize + DeserializeOwned + Send + 'static,
+    T: WorkerTask<Output = ()> + Serialize + DeserializeOwned + Send + 'static,
 {
     type Handle = AutoKillChild;
     type Error = std::io::Error;
@@ -49,7 +49,7 @@ pub struct ReducerProcessRuntime;
 
 impl<T> WorkerRuntime<T> for ReducerProcessRuntime
 where
-    T: Runnable<Output = ()> + Serialize + DeserializeOwned + Send + 'static,
+    T: WorkerTask<Output = ()> + Serialize + DeserializeOwned + Send + 'static,
 {
     type Handle = AutoKillChild;
     type Error = std::io::Error;

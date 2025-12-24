@@ -1,15 +1,15 @@
 pub mod completion_signaling;
 pub mod config;
-pub mod default_phase_executor;
+pub mod executor;
 pub mod local_state_access;
 pub mod map_reduce_problem;
 pub mod mapper;
-pub mod phase_executor;
 pub mod reducer;
 pub mod shutdown_signal;
 pub mod state_access;
 pub mod utils;
 pub mod work_channel;
 pub mod worker;
+pub mod worker_factory;
 pub mod worker_io;
 pub mod worker_runtime;

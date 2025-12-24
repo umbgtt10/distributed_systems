@@ -1,7 +1,8 @@
 use crate::completion_signaling::CompletionSignaling;
 use crate::config::Config;
-use crate::default_phase_executor::DefaultPhaseExecutor;
-use crate::worker::{Worker, WorkerFactory};
+use crate::executor::Executor;
+use crate::worker::Worker;
+use crate::worker_factory::WorkerFactory;
 use rand::Rng;
 
 pub fn generate_random_string(rng: &mut impl Rng, max_length: usize) -> String {
@@ -48,7 +49,7 @@ pub fn initialize_phase<W, S, F>(
     num_workers: usize,
     mut factory: F,
     timeout_ms: u64,
-) -> (Vec<W>, DefaultPhaseExecutor<W, S, F>)
+) -> (Vec<W>, Executor<W, S, F>)
 where
     W: Worker,
     S: CompletionSignaling,
@@ -59,7 +60,7 @@ where
         workers.push(factory.create_worker(id));
     }
 
-    let executor = DefaultPhaseExecutor::new(factory, timeout_ms);
+    let executor = Executor::new(factory, timeout_ms);
 
     (workers, executor)
 }

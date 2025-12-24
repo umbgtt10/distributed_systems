@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 /// Defines a unit of work that can be executed
 #[async_trait]
-pub trait Runnable: Send + 'static {
+pub trait WorkerTask: Send + 'static {
     type Output;
     async fn run(self) -> Self::Output;
 }

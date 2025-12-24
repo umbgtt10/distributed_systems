@@ -1,5 +1,5 @@
 use map_reduce_core::shutdown_signal::ShutdownSignal;
-use map_reduce_core::worker_runtime::{Runnable, WorkerRuntime};
+use map_reduce_core::worker_runtime::{WorkerTask, WorkerRuntime};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
@@ -10,7 +10,7 @@ pub struct ThreadRuntime;
 
 impl<T> WorkerRuntime<T> for ThreadRuntime
 where
-    T: Runnable<Output = ()> + Send + 'static,
+    T: WorkerTask<Output = ()> + Send + 'static,
 {
     type Handle = JoinHandle<()>;
     type Error = Box<dyn std::error::Error + Send + Sync>;

@@ -1,9 +1,9 @@
 use crate::map_reduce_problem::MapReduceProblem;
 use crate::shutdown_signal::ShutdownSignal;
 use crate::state_access::StateAccess;
-use crate::work_channel::WorkChannel;
-use crate::worker_io::{AsyncCompletionSender, AsyncWorkReceiver};
-use crate::worker_runtime::{Runnable, WorkerRuntime};
+use crate::work_channel::WorkDistributor;
+use crate::worker_io::{CompletionSender, WorkReceiver};
+use crate::worker_runtime::{WorkerTask, WorkerRuntime};
 use async_trait::async_trait;
 use rand::Rng;
 use serde::de::DeserializeOwned;
@@ -29,13 +29,13 @@ pub struct ReducerTask<P, S, SD, WR, CS> {
 }
 
 #[async_trait]
-impl<P, S, SD, WR, CS> Runnable for ReducerTask<P, S, SD, WR, CS>
+impl<P, S, SD, WR, CS> WorkerTask for ReducerTask<P, S, SD, WR, CS>
 where
     P: MapReduceProblem,
     S: StateAccess + Send + Sync + 'static,
     SD: ShutdownSignal + Send + 'static,
-    WR: AsyncWorkReceiver<P::ReduceAssignment, CS> + 'static,
-    CS: AsyncCompletionSender + 'static,
+    WR: WorkReceiver<P::ReduceAssignment, CS> + 'static,
+    CS: CompletionSender + 'static,
 {
     type Output = ();
 
@@ -112,11 +112,11 @@ pub struct Reducer<P, S, W, R, SD, WR, CS>
 where
     P: MapReduceProblem,
     S: StateAccess,
-    W: WorkChannel<P::ReduceAssignment, CS>,
+    W: WorkDistributor<P::ReduceAssignment, CS>,
     R: WorkerRuntime<ReducerTask<P, S, SD, WR, CS>>,
     SD: ShutdownSignal,
-    WR: AsyncWorkReceiver<P::ReduceAssignment, CS>,
-    CS: AsyncCompletionSender,
+    WR: WorkReceiver<P::ReduceAssignment, CS>,
+    CS: CompletionSender,
 {
     work_channel: W,
     task_handle: R::Handle,
@@ -127,11 +127,11 @@ impl<P, S, W, R, SD, WR, CS> Reducer<P, S, W, R, SD, WR, CS>
 where
     P: MapReduceProblem,
     S: StateAccess + Send + Sync + 'static,
-    W: WorkChannel<P::ReduceAssignment, CS> + 'static,
+    W: WorkDistributor<P::ReduceAssignment, CS> + 'static,
     R: WorkerRuntime<ReducerTask<P, S, SD, WR, CS>>,
     SD: ShutdownSignal + Send + 'static,
-    WR: AsyncWorkReceiver<P::ReduceAssignment, CS> + 'static,
-    CS: AsyncCompletionSender + 'static,
+    WR: WorkReceiver<P::ReduceAssignment, CS> + 'static,
+    CS: CompletionSender + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -173,11 +173,11 @@ impl<P, S, W, R, SD, WR, CS> crate::worker::Worker for Reducer<P, S, W, R, SD, W
 where
     P: MapReduceProblem,
     S: StateAccess + Send + Sync + 'static,
-    W: WorkChannel<P::ReduceAssignment, CS> + 'static,
+    W: WorkDistributor<P::ReduceAssignment, CS> + 'static,
     R: WorkerRuntime<ReducerTask<P, S, SD, WR, CS>>,
     SD: ShutdownSignal + Send + 'static,
-    WR: AsyncWorkReceiver<P::ReduceAssignment, CS> + 'static,
-    CS: AsyncCompletionSender + 'static,
+    WR: WorkReceiver<P::ReduceAssignment, CS> + 'static,
+    CS: CompletionSender + 'static,
 {
     type Assignment = P::ReduceAssignment;
     type Completion = CS;

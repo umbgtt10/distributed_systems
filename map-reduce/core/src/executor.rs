@@ -1,8 +1,7 @@
 use crate::completion_signaling::CompletionSignaling;
-use crate::phase_executor::PhaseExecutor;
 use crate::shutdown_signal::ShutdownSignal;
-use crate::worker::{Worker, WorkerFactory};
-use async_trait::async_trait;
+use crate::worker::Worker;
+use crate::worker_factory::WorkerFactory;
 use std::collections::HashMap;
 use std::mem;
 use std::time::{Duration, Instant};
@@ -14,9 +13,9 @@ struct AssignmentInfo<A> {
     start_time: Instant,
 }
 
-/// Default phase executor with fault tolerance and straggler detection
+/// Phase executor with fault tolerance and straggler detection
 /// Generic over worker type, completion signaling, and worker factory
-pub struct DefaultPhaseExecutor<W, CS, F>
+pub struct Executor<W, CS, F>
 where
     W: Worker,
     CS: CompletionSignaling,
@@ -27,7 +26,7 @@ where
     _phantom: std::marker::PhantomData<(W, CS)>,
 }
 
-impl<W, CS, F> DefaultPhaseExecutor<W, CS, F>
+impl<W, CS, F> Executor<W, CS, F>
 where
     W: Worker,
     CS: CompletionSignaling,
@@ -46,17 +45,14 @@ where
     }
 }
 
-#[async_trait]
-impl<W, CS, F> PhaseExecutor for DefaultPhaseExecutor<W, CS, F>
+impl<W, CS, F> Executor<W, CS, F>
 where
     W: Worker,
     CS: CompletionSignaling,
     W::Completion: From<CS::Token>,
     F: WorkerFactory<W>,
 {
-    type Worker = W;
-
-    async fn execute<SD>(
+    pub async fn execute<SD>(
         &mut self,
         mut workers: Vec<W>,
         assignments: Vec<W::Assignment>,

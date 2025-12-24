@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use map_reduce_core::completion_signaling::CompletionSignaling;
-use map_reduce_core::worker_io::AsyncCompletionSender;
+use map_reduce_core::worker_io::CompletionSender as CompletionSenderTrait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -52,18 +52,18 @@ impl SocketCompletionSignaling {
         }
     }
 
-    pub fn get_sender(&self, worker_id: usize) -> CompletionSender {
+    pub fn get_sender(&self, worker_id: usize) -> SocketCompletionToken {
         let port = self
             .ports
             .get(&worker_id)
             .copied()
             .expect("Invalid worker_id");
-        CompletionSender { port, worker_id }
+        SocketCompletionToken { port, worker_id }
     }
 }
 
 impl CompletionSignaling for SocketCompletionSignaling {
-    type Token = CompletionSender;
+    type Token = SocketCompletionToken;
 
     fn setup(num_workers: usize) -> Self {
         Self::new(num_workers)
@@ -130,13 +130,13 @@ impl CompletionSignaling for SocketCompletionSignaling {
 
 /// Completion sender
 #[derive(Clone, Serialize, Deserialize)]
-pub struct CompletionSender {
+pub struct SocketCompletionToken {
     port: u16,
     worker_id: usize,
 }
 
 #[async_trait]
-impl AsyncCompletionSender for CompletionSender {
+impl CompletionSenderTrait for SocketCompletionToken {
     async fn send(&self, result: Result<usize, ()>) -> bool {
         let addr = format!("127.0.0.1:{}", self.port);
         let message = match result {

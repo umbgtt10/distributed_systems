@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
 use map_reduce_core::completion_signaling::CompletionSignaling;
-use map_reduce_core::worker_io::AsyncCompletionSender;
+use map_reduce_core::worker_io::CompletionSender;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
@@ -22,7 +22,7 @@ pub struct RpcCompletionToken {
 }
 
 #[async_trait]
-impl AsyncCompletionSender for RpcCompletionToken {
+impl CompletionSender for RpcCompletionToken {
     async fn send(&self, result: Result<usize, ()>) -> bool {
         let msg = CompletionMessage {
             worker_id: self.worker_id,

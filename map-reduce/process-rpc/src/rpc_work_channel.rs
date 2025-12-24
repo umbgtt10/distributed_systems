@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
-use map_reduce_core::work_channel::WorkChannel;
-use map_reduce_core::worker_io::AsyncWorkReceiver;
+use map_reduce_core::work_channel::WorkDistributor;
+use map_reduce_core::worker_io::WorkReceiver;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 use std::net::SocketAddr;
@@ -31,7 +31,7 @@ impl<A, C> RpcWorkChannel<A, C> {
     }
 }
 
-impl<A, C> WorkChannel<A, C> for RpcWorkChannel<A, C>
+impl<A, C> WorkDistributor<A, C> for RpcWorkChannel<A, C>
 where
     A: Clone + Send + Serialize + 'static,
     C: Clone + Send + Serialize + 'static,
@@ -88,7 +88,7 @@ impl<A, C> RpcWorkReceiver<A, C> {
 }
 
 #[async_trait]
-impl<A, C> AsyncWorkReceiver<A, C> for RpcWorkReceiver<A, C>
+impl<A, C> WorkReceiver<A, C> for RpcWorkReceiver<A, C>
 where
     A: Send + Serialize + for<'de> Deserialize<'de> + 'static,
     C: Send + Serialize + for<'de> Deserialize<'de> + 'static,
@@ -137,3 +137,4 @@ where
         self.rx.as_mut().unwrap().recv().await
     }
 }
+
