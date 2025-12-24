@@ -19,9 +19,6 @@ pub struct Config {
     pub reducer_straggler_delay_ms: u64,
     pub mapper_timeout_ms: u64,
     pub reducer_timeout_ms: u64,
-    pub mapper_base_port: u16,
-    pub reducer_base_port: u16,
-    pub completion_base_port: u16,
 }
 
 impl Config {
@@ -51,28 +48,6 @@ impl Default for Config {
             reducer_straggler_delay_ms: 1000,
             mapper_timeout_ms: 0,
             reducer_timeout_ms: 0,
-            mapper_base_port: 9000,
-            reducer_base_port: 9100,
-            completion_base_port: 9200,
         }
     }
-}
-
-pub fn generate_random_string(rng: &mut impl rand::Rng, max_length: usize) -> String {
-    let length = rng.random_range(1..=max_length);
-    (0..length)
-        .map(|_| {
-            let c = rng.random_range(b'a'..=b'z');
-            c as char
-        })
-        .collect()
-}
-
-pub fn generate_target_word(rng: &mut impl rand::Rng, length: usize) -> String {
-    (0..length)
-        .map(|_| {
-            let c = rng.random_range(b'a'..=b'z');
-            c as char
-        })
-        .collect()
 }

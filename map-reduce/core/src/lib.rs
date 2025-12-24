@@ -4,6 +4,7 @@ pub mod map_reduce_problem;
 pub mod phase_executor;
 pub mod shutdown_signal;
 pub mod state_access;
+pub mod utils;
 pub mod work_channel;
 pub mod worker;
 pub mod worker_runtime;

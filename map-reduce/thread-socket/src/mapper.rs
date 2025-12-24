@@ -103,9 +103,7 @@ where
                     let random_value = rand::rng().random_range(0..100);
                     if random_value < straggler_probability {
                         let delay = rand::rng().random_range(1..=straggler_delay_ms);
-                        if id % 5 == 0 {
-                            eprintln!("🐌 Mapper {} is a straggler! Delaying {}ms", id, delay);
-                        }
+                        eprintln!("🐌 Mapper {} is a straggler! Delaying {}ms", id, delay);
                         thread::sleep(Duration::from_millis(delay));
                     }
                 }

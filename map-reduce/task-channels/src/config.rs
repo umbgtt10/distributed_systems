@@ -1,4 +1,3 @@
-use rand::Rng;
 use serde::Deserialize;
 use std::fs;
 
@@ -69,25 +68,4 @@ impl Config {
             reducer_straggler_delay_ms: 1000,
         }
     }
-}
-
-/// Generate a random string of up to max_len characters
-pub fn generate_random_string(rng: &mut impl Rng, max_len: usize) -> String {
-    let len = rng.random_range(1..=max_len);
-    (0..len)
-        .map(|_| {
-            let idx = rng.random_range(0..26);
-            (b'a' + idx) as char
-        })
-        .collect()
-}
-
-/// Generate a random target word of specified length
-pub fn generate_target_word(rng: &mut impl Rng, length: usize) -> String {
-    (0..length)
-        .map(|_| {
-            let idx = rng.random_range(0..26);
-            (b'a' + idx) as char
-        })
-        .collect()
 }

@@ -6,12 +6,13 @@ mod socket_completion_signaling;
 mod socket_work_channel;
 mod thread_runtime;
 
-use config::{generate_random_string, generate_target_word, Config};
+use config::Config;
 use local_state_access::LocalStateAccess;
 use map_reduce_core::completion_signaling::CompletionSignaling;
 use map_reduce_core::default_phase_executor::DefaultPhaseExecutor;
 use map_reduce_core::map_reduce_problem::MapReduceProblem;
 use map_reduce_core::state_access::StateAccess;
+use map_reduce_core::utils::{generate_random_string, generate_target_word};
 use map_reduce_word_search::{WordSearchContext, WordSearchProblem};
 use mapper::Mapper;
 use reducer::Reducer;

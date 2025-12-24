@@ -1,10 +1,13 @@
 use map_reduce_core::completion_signaling::CompletionSignaling;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::io::Write;
+use std::net::TcpStream;
+use std::sync::Arc;
+use tokio::io::AsyncReadExt;
+use tokio::net::TcpListener;
+use tokio_stream::wrappers::TcpListenerStream;
+use tokio_stream::{StreamExt, StreamMap};
 
 /// Completion message type
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,36 +18,37 @@ pub enum CompletionMessage {
 
 /// Socket-based completion signaling
 pub struct SocketCompletionSignaling {
-    base_port: u16, // Kept for compatibility but unused
-    listeners: Arc<Mutex<HashMap<usize, Arc<TcpListener>>>>,
+    listeners: StreamMap<usize, TcpListenerStream>,
     ports: Arc<HashMap<usize, u16>>,
 }
 
 impl SocketCompletionSignaling {
     pub fn new(num_workers: usize) -> Self {
-        let mut listeners = HashMap::new();
+        let mut listeners = StreamMap::new();
         let mut ports = HashMap::new();
 
         for i in 0..num_workers {
             // Use port 0 to let OS assign an available port
-            let listener =
-                TcpListener::bind("127.0.0.1:0").expect("Failed to bind completion listener");
-            let actual_port = listener
+            let std_listener =
+                std::net::TcpListener::bind("127.0.0.1:0").expect("Failed to bind completion listener");
+            std_listener
+                .set_nonblocking(true)
+                .expect("Failed to set nonblocking");
+            let actual_port = std_listener
                 .local_addr()
                 .expect("Failed to get local address")
                 .port();
 
-            listener
-                .set_nonblocking(true)
-                .expect("Failed to set nonblocking");
+            let tokio_listener =
+                TcpListener::from_std(std_listener).expect("Failed to convert to tokio listener");
+            let stream = TcpListenerStream::new(tokio_listener);
 
-            listeners.insert(i, Arc::new(listener));
+            listeners.insert(i, stream);
             ports.insert(i, actual_port);
         }
 
         Self {
-            base_port: 0, // No longer used
-            listeners: Arc::new(Mutex::new(listeners)),
+            listeners,
             ports: Arc::new(ports),
         }
     }
@@ -71,73 +75,49 @@ impl CompletionSignaling for SocketCompletionSignaling {
     }
 
     async fn wait_next(&mut self) -> Option<Result<usize, usize>> {
-        loop {
-            {
-                let listeners_guard = self.listeners.lock().unwrap();
-                for (worker_id, listener) in listeners_guard.iter() {
-                    let worker_id = *worker_id;
-                    match listener.accept() {
-                        Ok((mut stream, _)) => {
-                            drop(listeners_guard);
+        while let Some((_worker_id, connection_result)) = self.listeners.next().await {
+            match connection_result {
+                Ok(mut stream) => {
 
-                            // Set stream to blocking mode for reading
-                            if stream.set_nonblocking(false).is_err() {
-                                return None;
+                    let mut len_bytes = [0u8; 4];
+                    if stream.read_exact(&mut len_bytes).await.is_ok() {
+                        let len = u32::from_be_bytes(len_bytes) as usize;
+                        let mut buffer = vec![0u8; len];
+                        if stream.read_exact(&mut buffer).await.is_ok() {
+                            if let Ok(msg) = serde_json::from_slice::<CompletionMessage>(&buffer) {
+                                return Some(match msg {
+                                    CompletionMessage::Success(id) => Ok(id),
+                                    CompletionMessage::Failure(id) => Err(id),
+                                });
                             }
-
-                            let mut len_bytes = [0u8; 4];
-                            if stream.read_exact(&mut len_bytes).is_ok() {
-                                let len = u32::from_be_bytes(len_bytes) as usize;
-                                let mut buffer = vec![0u8; len];
-                                if stream.read_exact(&mut buffer).is_ok() {
-                                    if let Ok(msg) =
-                                        serde_json::from_slice::<CompletionMessage>(&buffer)
-                                    {
-                                        return Some(match msg {
-                                            CompletionMessage::Success(id) => Ok(id),
-                                            CompletionMessage::Failure(id) => Err(id),
-                                        });
-                                    }
-                                }
-                            }
-                            return None;
-                        }
-                        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                            // No data available
-                        }
-                        Err(_) => {
-                            // Error occurred
                         }
                     }
                 }
+                Err(_) => {
+                    // Error occurred accepting connection
+                }
             }
-
-            tokio::time::sleep(Duration::from_millis(10)).await;
         }
+        None
     }
 
     async fn drain_worker(&mut self, worker_id: usize) {
-        if let Some(listener) = self.listeners.lock().unwrap().get(&worker_id) {
+        if let Some(mut stream) = self.listeners.remove(&worker_id) {
             let start = std::time::Instant::now();
-            while start.elapsed() < Duration::from_millis(50) {
-                match listener.accept() {
-                    Ok((mut stream, _)) => {
-                        // Set blocking mode for reading
-                        let _ = stream.set_nonblocking(false);
-
+            while start.elapsed() < std::time::Duration::from_millis(50) {
+                match tokio::time::timeout(std::time::Duration::from_millis(10), stream.next()).await {
+                    Ok(Some(Ok(mut conn))) => {
                         let mut len_bytes = [0u8; 4];
-                        if stream.read_exact(&mut len_bytes).is_ok() {
+                        if conn.read_exact(&mut len_bytes).await.is_ok() {
                             let len = u32::from_be_bytes(len_bytes) as usize;
                             let mut buffer = vec![0u8; len];
-                            let _ = stream.read_exact(&mut buffer);
+                            let _ = conn.read_exact(&mut buffer).await;
                         }
                     }
-                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        break;
-                    }
-                    Err(_) => break,
+                    _ => break,
                 }
             }
+            self.listeners.insert(worker_id, stream);
         }
     }
 }
