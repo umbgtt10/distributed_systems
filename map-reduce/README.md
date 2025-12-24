@@ -358,7 +358,6 @@ This project teaches:
 - **Original Lab**: [MIT 6.824 Lab 1](https://pdos.csail.mit.edu/6.824/labs/lab-mr.html)
 - **MIT Course**: [6.824 Home Page](https://pdos.csail.mit.edu/6.824/)
 - **MapReduce Paper**: [Google's MapReduce (2004)](https://research.google/pubs/pub62/)
-- **Architecture Review**: [CODE_REVIEW.md](CODE_REVIEW.md) - Comprehensive analysis
 
 ---
 
