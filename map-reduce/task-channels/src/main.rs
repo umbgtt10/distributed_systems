@@ -6,6 +6,7 @@ mod mpsc_work_channel;
 mod reducer;
 mod task_work_distributor;
 mod tokio_runtime;
+mod types;
 
 use channel_completion_signaling::{ChannelCompletionSignaling, CompletionMessage};
 use config::{generate_random_string, generate_target_word, Config};
@@ -23,6 +24,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::{signal, spawn};
 use tokio_runtime::{TokenShutdownSignal, TokioRuntime};
 use tokio_util::sync::CancellationToken;
+use types::{MapperType, ReducerType};
 
 #[tokio::main]
 async fn main() {
@@ -115,18 +117,6 @@ async fn main() {
     let cancel_token = CancellationToken::new();
     let shutdown_signal = TokenShutdownSignal::new(cancel_token.clone());
 
-    // Define mapper type
-    type MapperType = Mapper<
-        WordSearchProblem,
-        LocalStateAccess,
-        MpscWorkChannel<
-            <WordSearchProblem as MapReduceProblem>::MapAssignment,
-            Sender<CompletionMessage>,
-        >,
-        TokioRuntime,
-        TokenShutdownSignal,
-    >;
-
     // Create mapper factory
     let state_for_mapper = state.clone();
     let shutdown_for_mapper = shutdown_signal.clone();
@@ -166,18 +156,6 @@ async fn main() {
         );
         mappers.push(mapper);
     }
-
-    // Define reducer type
-    type ReducerType = Reducer<
-        WordSearchProblem,
-        LocalStateAccess,
-        MpscWorkChannel<
-            <WordSearchProblem as MapReduceProblem>::ReduceAssignment,
-            Sender<CompletionMessage>,
-        >,
-        TokioRuntime,
-        TokenShutdownSignal,
-    >;
 
     // Create reducer factory
     let state_for_reducer = state.clone();

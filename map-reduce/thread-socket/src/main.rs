@@ -6,12 +6,12 @@ mod socket_completion_signaling;
 mod socket_work_channel;
 mod socket_work_distributor;
 mod thread_runtime;
+mod types;
 
 use config::{generate_random_string, generate_target_word, Config};
 use local_state_access::LocalStateAccess;
 use map_reduce_core::map_reduce_problem::MapReduceProblem;
 use map_reduce_core::state_access::StateAccess;
-use map_reduce_core::worker::Worker;
 use map_reduce_word_search::{WordSearchContext, WordSearchProblem};
 use mapper::Mapper;
 use reducer::Reducer;
@@ -20,6 +20,7 @@ use socket_work_channel::SocketWorkChannel;
 use socket_work_distributor::SocketWorkDistributor;
 use std::time::Instant;
 use thread_runtime::{AtomicShutdownSignal, ThreadRuntime};
+use types::{MapperType, ReducerType};
 
 fn main() {
     let start_time = Instant::now();
@@ -121,26 +122,6 @@ fn main() {
         SocketCompletionSignaling::new(config.completion_base_port, config.num_mappers);
     let reducer_signaling =
         SocketCompletionSignaling::new(config.completion_base_port + 100, config.num_reducers);
-
-    // Define types
-    type MapperType = Mapper<
-        WordSearchProblem,
-        LocalStateAccess,
-        SocketWorkChannel<<WordSearchProblem as MapReduceProblem>::MapAssignment, CompletionSender>,
-        ThreadRuntime,
-        AtomicShutdownSignal,
-    >;
-
-    type ReducerType = Reducer<
-        WordSearchProblem,
-        LocalStateAccess,
-        SocketWorkChannel<
-            <WordSearchProblem as MapReduceProblem>::ReduceAssignment,
-            CompletionSender,
-        >,
-        ThreadRuntime,
-        AtomicShutdownSignal,
-    >;
 
     // Create mappers
     let mut mapper_port = config.mapper_base_port;
