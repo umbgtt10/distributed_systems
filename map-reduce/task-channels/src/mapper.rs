@@ -4,6 +4,7 @@ use map_reduce_core::state_access::StateAccess;
 use map_reduce_core::work_channel::WorkChannel;
 use map_reduce_core::worker::Worker;
 use map_reduce_core::worker_runtime::WorkerRuntime;
+use rand::Rng;
 use tokio::sync::mpsc;
 
 /// Mapper worker that executes map work for a given problem
@@ -35,8 +36,9 @@ where
         shutdown_signal: SD,
         work_rx: mpsc::Receiver<(P::MapAssignment, mpsc::Sender<Result<usize, ()>>)>,
         work_channel: W,
+        failure_probability: u32,
     ) -> Self {
-        let handle = R::spawn(move || Self::run_task(id, work_rx, state, shutdown_signal));
+        let handle = R::spawn(move || Self::run_task(id, work_rx, state, shutdown_signal, failure_probability));
 
         Self {
             work_channel,
@@ -56,6 +58,7 @@ where
         mut work_rx: mpsc::Receiver<(P::MapAssignment, mpsc::Sender<Result<usize, ()>>)>,
         state: S,
         shutdown_signal: SD,
+        failure_probability: u32,
     ) {
         loop {
             tokio::select! {
@@ -70,6 +73,20 @@ where
                             if shutdown_signal.is_cancelled() {
                                 println!("Mapper {} cancelled", id);
                                 return;
+                            }
+
+                            // Simulate random failure based on probability
+                            let should_fail = if failure_probability > 0 {
+                                let random_value = rand::rng().random_range(0..100);
+                                random_value < failure_probability
+                            } else {
+                                false
+                            };
+
+                            if should_fail {
+                                eprintln!("💥 Mapper {} simulated failure!", id);
+                                let _ = complete_tx.send(Err(())).await;
+                                continue;
                             }
 
                             // Execute problem-specific map work with error handling

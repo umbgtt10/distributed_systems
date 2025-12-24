@@ -45,6 +45,11 @@ async fn main() {
     println!("  - Keys per reducer: {}", config.keys_per_reducer);
     println!("  - Mappers: {}", config.num_mappers);
     println!("  - Reducers: {}", config.num_reducers);
+    if config.mapper_failure_probability > 0 || config.reducer_failure_probability > 0 {
+        println!("\nFault Tolerance:");
+        println!("  - Mapper failure probability: {}%", config.mapper_failure_probability);
+        println!("  - Reducer failure probability: {}%", config.reducer_failure_probability);
+    }
     println!("\nGenerating data...");
 
     let mut rng = rand::rng();
@@ -85,6 +90,7 @@ async fn main() {
     // Create mapper factory
     let state_for_mapper = state.clone();
     let shutdown_for_mapper = shutdown_signal.clone();
+    let mapper_failure_prob = config.mapper_failure_probability;
     let mapper_factory = move |mapper_id: usize| -> MapperType {
         let (work_channel, work_rx) = MpscWorkChannel::<
             <WordSearchProblem as MapReduceProblem>::MapAssignment,
@@ -96,6 +102,7 @@ async fn main() {
             shutdown_for_mapper.clone(),
             work_rx,
             work_channel,
+            mapper_failure_prob,
         )
     };
 
@@ -109,6 +116,7 @@ async fn main() {
             shutdown_signal.clone(),
             work_rx,
             work_channel,
+            config.mapper_failure_probability,
         );
         mappers.push(mapper);
     }
@@ -125,6 +133,7 @@ async fn main() {
     // Create reducer factory
     let state_for_reducer = state.clone();
     let shutdown_for_reducer = shutdown_signal.clone();
+    let reducer_failure_prob = config.reducer_failure_probability;
     let reducer_factory = move |reducer_id: usize| -> ReducerType {
         let (work_channel, work_rx) = MpscWorkChannel::<
             <WordSearchProblem as MapReduceProblem>::ReduceAssignment,
@@ -136,6 +145,7 @@ async fn main() {
             shutdown_for_reducer.clone(),
             work_rx,
             work_channel,
+            reducer_failure_prob,
         )
     };
 
@@ -152,6 +162,7 @@ async fn main() {
             shutdown_signal.clone(),
             work_rx,
             work_channel,
+            config.reducer_failure_probability,
         );
         reducers.push(reducer);
     }

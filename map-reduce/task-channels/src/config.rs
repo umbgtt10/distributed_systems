@@ -2,7 +2,7 @@ use rand::Rng;
 use serde::Deserialize;
 use std::fs;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub num_strings: usize,
     pub max_string_length: usize,
@@ -12,6 +12,12 @@ pub struct Config {
     pub keys_per_reducer: usize,
     pub num_mappers: usize,
     pub num_reducers: usize,
+    /// Probability (0-100) that a mapper fails during execution
+    #[serde(default)]
+    pub mapper_failure_probability: u32,
+    /// Probability (0-100) that a reducer fails during execution
+    #[serde(default)]
+    pub reducer_failure_probability: u32,
 }
 
 impl Config {
@@ -31,6 +37,8 @@ impl Config {
             keys_per_reducer: 10,
             num_mappers: 100,
             num_reducers: 10,
+            mapper_failure_probability: 0,
+            reducer_failure_probability: 0,
         }
     }
 }
