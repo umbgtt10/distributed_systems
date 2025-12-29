@@ -1,6 +1,6 @@
 use crate::channel_status_sender::ChannelStatusSender;
 use crate::channel_work_receiver::ChannelWorkReceiver;
-use crate::channel_work_sender::MpscWorkChannel;
+use crate::channel_work_sender::ChannelWorkSender;
 use async_trait::async_trait;
 use map_reduce_core::map_reduce_job::MapReduceJob;
 use map_reduce_core::mapper::MapperTask;
@@ -54,7 +54,7 @@ impl<P, S, R, SD>
         Mapper<
             P,
             S,
-            MpscWorkChannel<<P as MapReduceJob>::MapAssignment, ChannelStatusSender>,
+            ChannelWorkSender<<P as MapReduceJob>::MapAssignment, ChannelStatusSender>,
             R,
             SD,
         >,
@@ -80,9 +80,14 @@ where
     async fn create_worker(
         &mut self,
         id: usize,
-    ) -> Mapper<P, S, MpscWorkChannel<<P as MapReduceJob>::MapAssignment, ChannelStatusSender>, R, SD>
-    {
-        let (work_channel, work_rx) = MpscWorkChannel::<
+    ) -> Mapper<
+        P,
+        S,
+        ChannelWorkSender<<P as MapReduceJob>::MapAssignment, ChannelStatusSender>,
+        R,
+        SD,
+    > {
+        let (work_channel, work_rx) = ChannelWorkSender::<
             <P as MapReduceJob>::MapAssignment,
             ChannelStatusSender,
         >::create_pair(10);

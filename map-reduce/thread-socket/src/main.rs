@@ -5,11 +5,11 @@ mod socket_status_sender;
 mod socket_work_receiver;
 mod socket_work_sender;
 mod socket_worker_runtime;
-mod socket_worker_synchonization;
+mod socket_worker_synchronization;
 
 use crate::socket_shutdown_signal::SocketShutdownSignal;
 use crate::socket_status_sender::SocketStatusSender;
-use crate::socket_worker_synchonization::SocketWorkerSynchronization;
+use crate::socket_worker_synchronization::SocketWorkerSynchronization;
 use map_reduce_core::config::Config;
 use map_reduce_core::in_memory_state_store::LocalStateAccess;
 use map_reduce_core::map_reduce_job::MapReduceJob;

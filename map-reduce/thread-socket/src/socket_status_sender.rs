@@ -1,4 +1,4 @@
-use crate::socket_worker_synchonization::CompletionMessage;
+use crate::socket_worker_synchronization::CompletionMessage;
 use async_trait::async_trait;
 use map_reduce_core::status_sender::StatusSender;
 use serde::{Deserialize, Serialize};

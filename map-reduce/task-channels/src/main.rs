@@ -8,7 +8,7 @@ mod mapper;
 mod reducer;
 
 use channel_status_sender::ChannelStatusSender;
-use channel_work_sender::MpscWorkChannel;
+use channel_work_sender::ChannelWorkSender;
 use channel_worker_runtime::TokioRuntime;
 use channel_worker_synchronization::ChannelWorkerSynchronization;
 use map_reduce_core::config::Config;
@@ -51,7 +51,7 @@ async fn main() {
     type MapperType = Mapper<
         WordSearchProblem,
         LocalStateAccess,
-        MpscWorkChannel<<WordSearchProblem as MapReduceJob>::MapAssignment, ChannelStatusSender>,
+        ChannelWorkSender<<WordSearchProblem as MapReduceJob>::MapAssignment, ChannelStatusSender>,
         TokioRuntime,
         ChannelShutdownSignal,
     >;
@@ -83,7 +83,10 @@ async fn main() {
     type ReducerType = Reducer<
         WordSearchProblem,
         LocalStateAccess,
-        MpscWorkChannel<<WordSearchProblem as MapReduceJob>::ReduceAssignment, ChannelStatusSender>,
+        ChannelWorkSender<
+            <WordSearchProblem as MapReduceJob>::ReduceAssignment,
+            ChannelStatusSender,
+        >,
         TokioRuntime,
         ChannelShutdownSignal,
     >;

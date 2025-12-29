@@ -1,23 +1,23 @@
 pub mod config;
-mod grpc_shutodwn_signal;
+mod grpc_shutdown_signal;
 mod grpc_state_server;
 mod grpc_state_store;
 mod grpc_status_sender;
 mod grpc_work_receiver;
 mod grpc_work_sender;
 mod grpc_worker_runtime;
-mod grpc_worker_synchonization;
+mod grpc_worker_synchronization;
 mod mapper;
 mod reducer;
 pub mod rpc;
 
-use crate::grpc_shutodwn_signal::DummyShutdownSignal;
+use crate::grpc_shutdown_signal::DummyShutdownSignal;
 use crate::grpc_status_sender::GrpcStatusSender;
 use clap::Parser;
 use grpc_state_server::start_state_server;
 use grpc_state_store::GrpcStateStore;
 use grpc_worker_runtime::{MapperProcessRuntime, ReducerProcessRuntime};
-use grpc_worker_synchonization::GrpcWorkerSynchonization;
+use grpc_worker_synchronization::GrpcWorkerSynchronization;
 use map_reduce_core::config::Config;
 use map_reduce_core::in_memory_state_store::LocalStateAccess;
 use map_reduce_core::map_reduce_job::MapReduceJob;
@@ -155,7 +155,7 @@ async fn run_coordinator() {
 
     // Initialize mapper phase
     let (mappers, mut mapper_executor) =
-        initialize_phase::<MapperType, GrpcWorkerSynchonization, _>(
+        initialize_phase::<MapperType, GrpcWorkerSynchronization, _>(
             config.num_mappers,
             mapper_factory,
             config.mapper_timeout_ms,
@@ -180,7 +180,7 @@ async fn run_coordinator() {
 
     // Initialize reducer phase
     let (reducers, mut reducer_executor) =
-        initialize_phase::<ReducerType, GrpcWorkerSynchonization, _>(
+        initialize_phase::<ReducerType, GrpcWorkerSynchronization, _>(
             config.num_reducers,
             reducer_factory,
             config.reducer_timeout_ms,

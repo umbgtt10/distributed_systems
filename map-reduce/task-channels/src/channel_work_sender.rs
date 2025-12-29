@@ -5,18 +5,18 @@ use tokio::task;
 
 /// Tokio mpsc channel-based work channel
 #[derive(Clone)]
-pub struct MpscWorkChannel<A, C> {
+pub struct ChannelWorkSender<A, C> {
     tx: Sender<WorkerMessage<A, C>>,
 }
 
-impl<A, C> MpscWorkChannel<A, C> {
+impl<A, C> ChannelWorkSender<A, C> {
     pub fn create_pair(buffer: usize) -> (Self, Receiver<WorkerMessage<A, C>>) {
         let (tx, rx) = mpsc::channel(buffer);
         (Self { tx }, rx)
     }
 }
 
-impl<A, C> WorkSender<A, C> for MpscWorkChannel<A, C>
+impl<A, C> WorkSender<A, C> for ChannelWorkSender<A, C>
 where
     A: Clone + Send + 'static,
     C: Clone + Send + 'static,

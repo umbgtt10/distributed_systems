@@ -52,13 +52,13 @@ impl SynchronizationService for SynchronizationServiceImpl {
 
 /// gRPC Synchronization Signaling
 /// Coordinator receives completion notifications from workers
-pub struct GrpcWorkerSynchonization {
+pub struct GrpcWorkerSynchronization {
     completion_rx: tokio::sync::mpsc::Receiver<(usize, bool)>,
     readiness_notifiers: Arc<Vec<Arc<Notify>>>,
     server_addr: String,
 }
 
-impl WorkerSynchronization for GrpcWorkerSynchonization {
+impl WorkerSynchronization for GrpcWorkerSynchronization {
     type StatusSender = GrpcStatusSender;
 
     fn setup(num_workers: usize) -> Self {
