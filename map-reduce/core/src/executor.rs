@@ -51,7 +51,7 @@ impl<W, CS, F> Executor<W, CS, F>
 where
     W: Worker,
     CS: WorkerSynchronization,
-    W::Completion: From<CS::Token>,
+    W::Completion: From<CS::StatusSender>,
     F: WorkerFactory<W>,
 {
     pub async fn execute<SD>(
@@ -77,9 +77,9 @@ where
 
         // Distribute initial assignments
         for (worker_id, worker) in workers.iter().enumerate().take(assignments.len()) {
-            // Initialize worker with synchronization token
-            let token = signaling.get_token(worker_id);
-            worker.initialize(token.clone().into());
+            // Initialize worker with synchronization sender
+            let status_sender = signaling.get_status_sender(worker_id);
+            worker.initialize(status_sender.clone().into());
 
             // Wait for worker to be ready (Startup Phase)
             if !signaling.wait_for_worker_ready(worker_id).await {
@@ -96,7 +96,7 @@ where
             }
 
             let assignment = assignments[assignment_index].clone();
-            worker.send_work(assignment.clone(), token.into());
+            worker.send_work(assignment.clone(), status_sender.into());
             worker_assignments.insert(
                 worker_id,
                 AssignmentInfo {
@@ -141,10 +141,10 @@ where
                         drop(failed_worker);
 
                         // Reset signaling for the worker
-                        let completion_token = signaling.reset_worker(worker_id).await;
+                        let completion_sender = signaling.reset_worker(worker_id).await;
 
                         // Initialize new worker
-                        workers[worker_id].initialize(completion_token.clone().into());
+                        workers[worker_id].initialize(completion_sender.clone().into());
 
                         // Wait for new worker to be ready
                         if !signaling.wait_for_worker_ready(worker_id).await {
@@ -153,7 +153,7 @@ where
 
                         // Reassign work
                         workers[worker_id]
-                            .send_work(info.assignment.clone(), completion_token.into());
+                            .send_work(info.assignment.clone(), completion_sender.into());
                         worker_assignments.insert(
                             worker_id,
                             AssignmentInfo {
@@ -188,7 +188,7 @@ where
                                 // Assign next assignment if available
                                 if assignment_index < assignments.len() {
                                     let assignment = assignments[assignment_index].clone();
-                                    let completion = signaling.get_token(worker_id);
+                                    let completion = signaling.get_status_sender(worker_id);
                                     workers[worker_id]
                                         .send_work(assignment.clone(), completion.into());
                                     worker_assignments.insert(

@@ -1,7 +1,4 @@
-use map_reduce_core::shutdown_signal::ShutdownSignal;
 use map_reduce_core::worker_runtime::{WorkerRuntime, WorkerTask};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 /// Thread-based runtime
@@ -36,29 +33,5 @@ where
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
             format!("Tokio join error: {}", e).into()
         })?
-    }
-}
-
-/// Thread-based shutdown signal using atomic flag
-#[derive(Clone)]
-pub struct AtomicShutdownSignal {
-    flag: Arc<AtomicBool>,
-}
-
-impl AtomicShutdownSignal {
-    pub fn new() -> Self {
-        Self {
-            flag: Arc::new(AtomicBool::new(false)),
-        }
-    }
-
-    pub fn shutdown(&self) {
-        self.flag.store(true, Ordering::SeqCst);
-    }
-}
-
-impl ShutdownSignal for AtomicShutdownSignal {
-    fn is_cancelled(&self) -> bool {
-        self.flag.load(Ordering::SeqCst)
     }
 }

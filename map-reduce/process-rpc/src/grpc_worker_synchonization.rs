@@ -59,7 +59,7 @@ pub struct GrpcWorkerSynchonization {
 }
 
 impl WorkerSynchronization for GrpcWorkerSynchonization {
-    type Token = GrpcStatusSender;
+    type StatusSender = GrpcStatusSender;
 
     fn setup(num_workers: usize) -> Self {
         let (tx, rx) = tokio::sync::mpsc::channel(100);
@@ -108,7 +108,7 @@ impl WorkerSynchronization for GrpcWorkerSynchonization {
         }
     }
 
-    fn get_token(&self, worker_id: usize) -> Self::Token {
+    fn get_status_sender(&self, worker_id: usize) -> Self::StatusSender {
         GrpcStatusSender {
             server_addr: self.server_addr.clone(),
             worker_id,
@@ -134,8 +134,8 @@ impl WorkerSynchronization for GrpcWorkerSynchonization {
         })
     }
 
-    async fn reset_worker(&mut self, worker_id: usize) -> Self::Token {
+    async fn reset_worker(&mut self, worker_id: usize) -> Self::StatusSender {
         // No explicit reset needed for Notify as it consumes the permit on wait
-        self.get_token(worker_id)
+        self.get_status_sender(worker_id)
     }
 }

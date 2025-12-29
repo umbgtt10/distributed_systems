@@ -1,11 +1,13 @@
 mod mapper;
 mod reducer;
+mod socket_shutdown_signal;
 mod socket_status_sender;
 mod socket_work_receiver;
 mod socket_work_sender;
 mod socket_worker_runtime;
 mod socket_worker_synchonization;
 
+use crate::socket_shutdown_signal::SocketShutdownSignal;
 use crate::socket_status_sender::SocketStatusSender;
 use crate::socket_worker_synchonization::SocketWorkerSynchronization;
 use map_reduce_core::config::Config;
@@ -17,7 +19,7 @@ use map_reduce_word_search::{WordSearchContext, WordSearchProblem};
 use mapper::{Mapper, MapperFactory};
 use reducer::{Reducer, ReducerFactory};
 use socket_work_sender::SocketWorkSender;
-use socket_worker_runtime::{AtomicShutdownSignal, ThreadRuntime};
+use socket_worker_runtime::ThreadRuntime;
 use std::time::Instant;
 
 #[tokio::main]
@@ -39,7 +41,7 @@ async fn main() {
     println!("\nStarting MapReduce...");
 
     // Create shutdown signal
-    let shutdown_signal = AtomicShutdownSignal::new();
+    let shutdown_signal = SocketShutdownSignal::new();
 
     // Setup Ctrl+C handler
     let shutdown_for_handler = shutdown_signal.clone();
@@ -55,7 +57,7 @@ async fn main() {
         LocalStateAccess,
         SocketWorkSender<<WordSearchProblem as MapReduceJob>::MapAssignment, SocketStatusSender>,
         ThreadRuntime,
-        AtomicShutdownSignal,
+        SocketShutdownSignal,
     >;
 
     type ReducerType = Reducer<
@@ -63,7 +65,7 @@ async fn main() {
         LocalStateAccess,
         SocketWorkSender<<WordSearchProblem as MapReduceJob>::ReduceAssignment, SocketStatusSender>,
         ThreadRuntime,
-        AtomicShutdownSignal,
+        SocketShutdownSignal,
     >;
 
     // Create mapper factory
@@ -71,7 +73,7 @@ async fn main() {
         WordSearchProblem,
         LocalStateAccess,
         ThreadRuntime,
-        AtomicShutdownSignal,
+        SocketShutdownSignal,
     >::new(
         state.clone(),
         shutdown_signal.clone(),
@@ -94,7 +96,7 @@ async fn main() {
         WordSearchProblem,
         LocalStateAccess,
         ThreadRuntime,
-        AtomicShutdownSignal,
+        SocketShutdownSignal,
     >::new(
         state.clone(),
         shutdown_signal.clone(),

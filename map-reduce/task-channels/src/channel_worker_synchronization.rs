@@ -8,13 +8,13 @@ use tokio_stream::{StreamExt, StreamMap};
 pub type CompletionMessage = Result<usize, ()>;
 
 /// Channel-based completion signaling using tokio mpsc and StreamMap
-pub struct ChannelCompletionSignaling {
+pub struct ChannelWorkerSynchronization {
     completion_txs: Vec<Sender<CompletionMessage>>,
     completion_streams: StreamMap<usize, ReceiverStream<CompletionMessage>>,
 }
 
-impl WorkerSynchronization for ChannelCompletionSignaling {
-    type Token = ChannelStatusSender;
+impl WorkerSynchronization for ChannelWorkerSynchronization {
+    type StatusSender = ChannelStatusSender;
 
     fn setup(num_workers: usize) -> Self {
         let mut completion_txs = Vec::new();
@@ -32,7 +32,7 @@ impl WorkerSynchronization for ChannelCompletionSignaling {
         }
     }
 
-    fn get_token(&self, worker_id: usize) -> Self::Token {
+    fn get_status_sender(&self, worker_id: usize) -> Self::StatusSender {
         ChannelStatusSender {
             tx: self.completion_txs[worker_id].clone(),
         }
@@ -42,7 +42,7 @@ impl WorkerSynchronization for ChannelCompletionSignaling {
         true
     }
 
-    async fn reset_worker(&mut self, worker_id: usize) -> Self::Token {
+    async fn reset_worker(&mut self, worker_id: usize) -> Self::StatusSender {
         // Remove old stream
         if let Some(mut stream) = self.completion_streams.remove(&worker_id) {
             // Drain pending messages
@@ -61,7 +61,7 @@ impl WorkerSynchronization for ChannelCompletionSignaling {
         self.completion_streams
             .insert(worker_id, ReceiverStream::new(rx));
 
-        self.get_token(worker_id)
+        self.get_status_sender(worker_id)
     }
 
     async fn wait_next(&mut self) -> Option<Result<usize, usize>> {

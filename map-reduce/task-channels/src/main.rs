@@ -1,3 +1,4 @@
+mod channel_shutdown_signal;
 mod channel_status_sender;
 mod channel_work_receiver;
 mod channel_work_sender;
@@ -8,8 +9,8 @@ mod reducer;
 
 use channel_status_sender::ChannelStatusSender;
 use channel_work_sender::MpscWorkChannel;
-use channel_worker_runtime::{TokenShutdownSignal, TokioRuntime};
-use channel_worker_synchronization::ChannelCompletionSignaling;
+use channel_worker_runtime::TokioRuntime;
+use channel_worker_synchronization::ChannelWorkerSynchronization;
 use map_reduce_core::config::Config;
 use map_reduce_core::in_memory_state_store::LocalStateAccess;
 use map_reduce_core::map_reduce_job::MapReduceJob;
@@ -21,6 +22,8 @@ use reducer::{Reducer, ReducerFactory};
 use std::time::Instant;
 use tokio::{signal, spawn};
 use tokio_util::sync::CancellationToken;
+
+use crate::channel_shutdown_signal::ChannelShutdownSignal;
 
 #[tokio::main]
 async fn main() {
@@ -42,7 +45,7 @@ async fn main() {
 
     // Create cancellation token
     let cancel_token = CancellationToken::new();
-    let shutdown_signal = TokenShutdownSignal::new(cancel_token.clone());
+    let shutdown_signal = ChannelShutdownSignal::new(cancel_token.clone());
 
     // Define mapper type
     type MapperType = Mapper<
@@ -50,7 +53,7 @@ async fn main() {
         LocalStateAccess,
         MpscWorkChannel<<WordSearchProblem as MapReduceJob>::MapAssignment, ChannelStatusSender>,
         TokioRuntime,
-        TokenShutdownSignal,
+        ChannelShutdownSignal,
     >;
 
     // Create mapper factory
@@ -58,7 +61,7 @@ async fn main() {
         WordSearchProblem,
         LocalStateAccess,
         TokioRuntime,
-        TokenShutdownSignal,
+        ChannelShutdownSignal,
     >::new(
         state.clone(),
         shutdown_signal.clone(),
@@ -69,7 +72,7 @@ async fn main() {
 
     // Create initial mapper pool
     let (mappers, mut mapper_executor) =
-        initialize_phase::<MapperType, ChannelCompletionSignaling, _>(
+        initialize_phase::<MapperType, ChannelWorkerSynchronization, _>(
             config.num_mappers,
             mapper_factory,
             config.mapper_timeout_ms,
@@ -82,7 +85,7 @@ async fn main() {
         LocalStateAccess,
         MpscWorkChannel<<WordSearchProblem as MapReduceJob>::ReduceAssignment, ChannelStatusSender>,
         TokioRuntime,
-        TokenShutdownSignal,
+        ChannelShutdownSignal,
     >;
 
     // Create reducer factory
@@ -90,7 +93,7 @@ async fn main() {
         WordSearchProblem,
         LocalStateAccess,
         TokioRuntime,
-        TokenShutdownSignal,
+        ChannelShutdownSignal,
     >::new(
         state.clone(),
         shutdown_signal.clone(),
@@ -101,7 +104,7 @@ async fn main() {
 
     // Create initial reducer pool
     let (reducers, mut reducer_executor) =
-        initialize_phase::<ReducerType, ChannelCompletionSignaling, _>(
+        initialize_phase::<ReducerType, ChannelWorkerSynchronization, _>(
             config.num_reducers,
             reducer_factory,
             config.reducer_timeout_ms,

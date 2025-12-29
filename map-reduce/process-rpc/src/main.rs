@@ -1,4 +1,5 @@
 pub mod config;
+mod grpc_shutodwn_signal;
 mod grpc_state_server;
 mod grpc_state_store;
 mod grpc_status_sender;
@@ -10,6 +11,8 @@ mod mapper;
 mod reducer;
 pub mod rpc;
 
+use crate::grpc_shutodwn_signal::DummyShutdownSignal;
+use crate::grpc_status_sender::GrpcStatusSender;
 use clap::Parser;
 use grpc_state_server::start_state_server;
 use grpc_state_store::GrpcStateStore;
@@ -20,17 +23,13 @@ use map_reduce_core::in_memory_state_store::LocalStateAccess;
 use map_reduce_core::map_reduce_job::MapReduceJob;
 use map_reduce_core::mapper::MapperTask;
 use map_reduce_core::reducer::ReducerTask;
-use map_reduce_core::shutdown_signal::ShutdownSignal;
 use map_reduce_core::state_store::StateStore;
 use map_reduce_core::utils::{generate_test_data, initialize_phase};
 use map_reduce_core::worker_runtime::WorkerTask;
 use map_reduce_word_search::{WordSearchContext, WordSearchProblem};
 use mapper::{Mapper, MapperFactory};
 use reducer::{Reducer, ReducerFactory};
-use serde::{Deserialize, Serialize};
 use std::time::Instant;
-
-use crate::grpc_status_sender::GrpcStatusSender;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -43,14 +42,6 @@ struct Cli {
 
     #[arg(long)]
     task: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct DummyShutdownSignal;
-impl ShutdownSignal for DummyShutdownSignal {
-    fn is_cancelled(&self) -> bool {
-        false
-    }
 }
 
 #[tokio::main]

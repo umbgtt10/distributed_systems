@@ -60,13 +60,13 @@ impl SocketWorkerSynchronization {
 }
 
 impl WorkerSynchronization for SocketWorkerSynchronization {
-    type Token = SocketStatusSender;
+    type StatusSender = SocketStatusSender;
 
     fn setup(num_workers: usize) -> Self {
         Self::new(num_workers)
     }
 
-    fn get_token(&self, worker_id: usize) -> Self::Token {
+    fn get_status_sender(&self, worker_id: usize) -> Self::StatusSender {
         self.get_sender(worker_id)
     }
 
@@ -74,7 +74,7 @@ impl WorkerSynchronization for SocketWorkerSynchronization {
         true
     }
 
-    async fn reset_worker(&mut self, worker_id: usize) -> Self::Token {
+    async fn reset_worker(&mut self, worker_id: usize) -> Self::StatusSender {
         // Remove old listener (closes socket)
         // This implicitly drains any pending connections because the listener is dropped
         self.listeners.remove(&worker_id);
