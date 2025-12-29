@@ -3,17 +3,24 @@ name = "map-reduce-process-rpc"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "map-reduce-process-rpc"
+path = "src/main.rs"
+
 [dependencies]
-map-reduce-core = { path = "../core" }
-map-reduce-word-search = { path = "../word-search" }
+map-reduce-core = { workspace = true }
+map-reduce-word-search = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-anyhow = "1.0"
-clap = { version = "4.5", features = ["derive"] }
-futures = "0.3"
+clap = { workspace = true }
 async-trait = { workspace = true }
 rand = { workspace = true }
-ctrlc = { workspace = true }
-tokio-util = { workspace = true, features = ["codec"] }
-bytes = "1.11.0"
+
+# gRPC dependencies
+tonic = { workspace = true }
+prost = { workspace = true }
+tokio-stream = { workspace = true }
+
+[build-dependencies]
+tonic-build = { workspace = true }

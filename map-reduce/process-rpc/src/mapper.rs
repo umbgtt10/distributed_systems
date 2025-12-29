@@ -1,5 +1,5 @@
-use crate::rpc_completion_signaling::RpcCompletionToken;
-use crate::rpc_work_channel::{RpcWorkChannel, RpcWorkReceiver};
+use crate::grpc_completion_signaling::GrpcCompletionToken;
+use crate::grpc_work_channel::{GrpcWorkChannel, GrpcWorkReceiver};
 use map_reduce_core::map_reduce_job::MapReduceJob;
 use map_reduce_core::mapper::MapperTask;
 use map_reduce_core::shutdown_signal::ShutdownSignal;
@@ -15,8 +15,8 @@ pub type Mapper<P, S, W, R, SD> = map_reduce_core::mapper::Mapper<
     W,
     R,
     SD,
-    RpcWorkReceiver<<P as MapReduceJob>::MapAssignment, RpcCompletionToken>,
-    RpcCompletionToken,
+    GrpcWorkReceiver<<P as MapReduceJob>::MapAssignment, GrpcCompletionToken>,
+    GrpcCompletionToken,
 >;
 
 pub struct MapperFactory<P, S, R, SD> {
@@ -49,20 +49,26 @@ impl<P, S, R, SD> MapperFactory<P, S, R, SD> {
 
 impl<P, S, R, SD>
     WorkerFactory<
-        Mapper<P, S, RpcWorkChannel<<P as MapReduceJob>::MapAssignment, RpcCompletionToken>, R, SD>,
+        Mapper<
+            P,
+            S,
+            GrpcWorkChannel<<P as MapReduceJob>::MapAssignment, GrpcCompletionToken>,
+            R,
+            SD,
+        >,
     > for MapperFactory<P, S, R, SD>
 where
     P: MapReduceJob + 'static,
     S: StateAccess + Clone + Send + Sync + Serialize + for<'de> Deserialize<'de> + 'static,
     SD: ShutdownSignal + Clone + Send + Sync + Serialize + for<'de> Deserialize<'de> + 'static,
-    P::MapAssignment: Send + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+    P::MapAssignment: Send + Clone + Sync + Serialize + for<'de> Deserialize<'de> + 'static,
     R: WorkerRuntime<
             MapperTask<
                 P,
                 S,
                 SD,
-                RpcWorkReceiver<<P as MapReduceJob>::MapAssignment, RpcCompletionToken>,
-                RpcCompletionToken,
+                GrpcWorkReceiver<<P as MapReduceJob>::MapAssignment, GrpcCompletionToken>,
+                GrpcCompletionToken,
             >,
         > + Clone
         + Send
@@ -72,14 +78,11 @@ where
     fn create_worker(
         &mut self,
         id: usize,
-    ) -> Mapper<P, S, RpcWorkChannel<<P as MapReduceJob>::MapAssignment, RpcCompletionToken>, R, SD>
+    ) -> Mapper<P, S, GrpcWorkChannel<<P as MapReduceJob>::MapAssignment, GrpcCompletionToken>, R, SD>
     {
-        // Pick a random port between 10000 and 60000
-        let port = rand::random::<u16>() % 50000 + 10000;
-        let addr = format!("127.0.0.1:{}", port).parse().unwrap();
-
-        let work_channel = RpcWorkChannel::new(addr);
-        let work_rx = RpcWorkReceiver::new(port);
+        let port = crate::config::MAPPER_BASE_PORT + id as u16;
+        let work_channel = GrpcWorkChannel::new(format!("127.0.0.1:{}", port));
+        let work_rx = GrpcWorkReceiver::new(port);
 
         map_reduce_core::mapper::Mapper::new(
             id,

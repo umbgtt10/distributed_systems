@@ -1,5 +1,5 @@
-use crate::rpc_completion_signaling::RpcCompletionToken;
-use crate::rpc_work_channel::{RpcWorkChannel, RpcWorkReceiver};
+use crate::grpc_completion_signaling::GrpcCompletionToken;
+use crate::grpc_work_channel::{GrpcWorkChannel, GrpcWorkReceiver};
 use map_reduce_core::map_reduce_job::MapReduceJob;
 use map_reduce_core::reducer::ReducerTask;
 use map_reduce_core::shutdown_signal::ShutdownSignal;
@@ -15,8 +15,8 @@ pub type Reducer<P, S, W, R, SD> = map_reduce_core::reducer::Reducer<
     W,
     R,
     SD,
-    RpcWorkReceiver<<P as MapReduceJob>::ReduceAssignment, RpcCompletionToken>,
-    RpcCompletionToken,
+    GrpcWorkReceiver<<P as MapReduceJob>::ReduceAssignment, GrpcCompletionToken>,
+    GrpcCompletionToken,
 >;
 
 pub struct ReducerFactory<P, S, R, SD> {
@@ -52,7 +52,7 @@ impl<P, S, R, SD>
         Reducer<
             P,
             S,
-            RpcWorkChannel<<P as MapReduceJob>::ReduceAssignment, RpcCompletionToken>,
+            GrpcWorkChannel<<P as MapReduceJob>::ReduceAssignment, GrpcCompletionToken>,
             R,
             SD,
         >,
@@ -61,14 +61,14 @@ where
     P: MapReduceJob + 'static,
     S: StateAccess + Clone + Send + Sync + Serialize + for<'de> Deserialize<'de> + 'static,
     SD: ShutdownSignal + Clone + Send + Sync + Serialize + for<'de> Deserialize<'de> + 'static,
-    P::ReduceAssignment: Send + Clone + Serialize + for<'de> Deserialize<'de> + 'static,
+    P::ReduceAssignment: Send + Clone + Sync + Serialize + for<'de> Deserialize<'de> + 'static,
     R: WorkerRuntime<
             ReducerTask<
                 P,
                 S,
                 SD,
-                RpcWorkReceiver<<P as MapReduceJob>::ReduceAssignment, RpcCompletionToken>,
-                RpcCompletionToken,
+                GrpcWorkReceiver<<P as MapReduceJob>::ReduceAssignment, GrpcCompletionToken>,
+                GrpcCompletionToken,
             >,
         > + Clone
         + Send
@@ -81,15 +81,13 @@ where
     ) -> Reducer<
         P,
         S,
-        RpcWorkChannel<<P as MapReduceJob>::ReduceAssignment, RpcCompletionToken>,
+        GrpcWorkChannel<<P as MapReduceJob>::ReduceAssignment, GrpcCompletionToken>,
         R,
         SD,
     > {
-        let port = rand::random::<u16>() % 50000 + 10000;
-        let addr = format!("127.0.0.1:{}", port).parse().unwrap();
-
-        let work_channel = RpcWorkChannel::new(addr);
-        let work_rx = RpcWorkReceiver::new(port);
+        let port = crate::config::REDUCER_BASE_PORT + id as u16;
+        let work_channel = GrpcWorkChannel::new(format!("127.0.0.1:{}", port));
+        let work_rx = GrpcWorkReceiver::new(port);
 
         map_reduce_core::reducer::Reducer::new(
             id,

@@ -1,10 +1,10 @@
 # run_proto_rpc.ps1
 
-Write-Host "=== MapReduce Proto-RPC-Tonic Launcher ===" -ForegroundColor Cyan
+Write-Host "=== MapReduce Process-RPC Launcher ===" -ForegroundColor Cyan
 
 # 1. Cleanup pending processes
 Write-Host "`n[1/3] Cleaning up pending processes..." -ForegroundColor Yellow
-Stop-Process -Name "map-reduce-proto-rpc-tonic" -Force -ErrorAction SilentlyContinue
+Stop-Process -Name "process-rpc" -Force -ErrorAction SilentlyContinue
 Write-Host "Cleanup complete." -ForegroundColor Green
 
 # 2. Check/Install Protobuf
@@ -35,9 +35,9 @@ if (-not (Get-Command protoc -ErrorAction SilentlyContinue)) {
 }
 
 # 3. Start the application
-Write-Host "`n[3/3] Starting map-reduce-proto-rpc-tonic..." -ForegroundColor Yellow
+Write-Host "`n[3/3] Starting process-rpc..." -ForegroundColor Yellow
 $scriptPath = $PSScriptRoot
-# Assuming script is in map-reduce/proto-rpc-tonic/scripts/
+# Assuming script is in map-reduce/process-rpc/scripts/
 $projectDir = Join-Path $scriptPath ".."
 $projectDir = Resolve-Path $projectDir
 

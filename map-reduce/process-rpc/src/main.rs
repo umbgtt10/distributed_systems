@@ -1,13 +1,17 @@
+pub mod config;
+mod grpc_completion_signaling;
+mod grpc_state_access;
+mod grpc_state_server;
+mod grpc_work_channel;
 mod mapper;
 mod process_runtime;
 mod reducer;
-mod rpc;
-mod rpc_completion_signaling;
-mod rpc_state_access;
-mod rpc_work_channel;
-mod state_server;
+pub mod rpc;
 
 use clap::Parser;
+use grpc_completion_signaling::GrpcCompletionSignaling;
+use grpc_state_access::GrpcStateAccess;
+use grpc_state_server::start_state_server;
 use map_reduce_core::config::Config;
 use map_reduce_core::local_state_access::LocalStateAccess;
 use map_reduce_core::map_reduce_job::MapReduceJob;
@@ -21,11 +25,7 @@ use map_reduce_word_search::{WordSearchContext, WordSearchProblem};
 use mapper::{Mapper, MapperFactory};
 use process_runtime::{MapperProcessRuntime, ReducerProcessRuntime};
 use reducer::{Reducer, ReducerFactory};
-use rpc_completion_signaling::{RpcCompletionSignaling, RpcCompletionToken};
-use rpc_state_access::RpcStateAccess;
-use rpc_work_channel::{RpcWorkChannel, RpcWorkReceiver};
 use serde::{Deserialize, Serialize};
-use state_server::StateServer;
 use std::time::Instant;
 
 #[derive(Parser)]
@@ -68,26 +68,26 @@ async fn run_worker(cli: Cli) {
         "mapper" => {
             let task: MapperTask<
                 WordSearchProblem,
-                RpcStateAccess,
+                GrpcStateAccess,
                 DummyShutdownSignal,
-                RpcWorkReceiver<
+                grpc_work_channel::GrpcWorkReceiver<
                     <WordSearchProblem as MapReduceJob>::MapAssignment,
-                    RpcCompletionToken,
+                    grpc_completion_signaling::GrpcCompletionToken,
                 >,
-                RpcCompletionToken,
+                grpc_completion_signaling::GrpcCompletionToken,
             > = serde_json::from_str(&task_json).expect("Failed to deserialize mapper task");
             task.run().await;
         }
         "reducer" => {
             let task: ReducerTask<
                 WordSearchProblem,
-                RpcStateAccess,
+                GrpcStateAccess,
                 DummyShutdownSignal,
-                RpcWorkReceiver<
+                grpc_work_channel::GrpcWorkReceiver<
                     <WordSearchProblem as MapReduceJob>::ReduceAssignment,
-                    RpcCompletionToken,
+                    grpc_completion_signaling::GrpcCompletionToken,
                 >,
-                RpcCompletionToken,
+                grpc_completion_signaling::GrpcCompletionToken,
             > = serde_json::from_str(&task_json).expect("Failed to deserialize reducer task");
             task.run().await;
         }
@@ -101,43 +101,44 @@ async fn run_coordinator() {
     // Load configuration
     let config = Config::load("config.json").expect("Failed to load config.json");
 
-    println!("=== MAP-REDUCE WORD SEARCH (Process-RPC) ===");
+    println!("=== MAP-REDUCE WORD SEARCH (Proto-RPC-Tonic/gRPC) ===");
     config.print_summary();
 
     let (data, targets) = generate_test_data(&config);
 
-    // Start State Server
+    // Start State Server with gRPC
     let local_state = LocalStateAccess::new();
     local_state.initialize(targets.clone());
 
     // Pick random port for state server
     let state_port = rand::random::<u16>() % 10000 + 20000;
-    let state_server = StateServer::new(local_state.clone(), state_port).await;
-    // Force 127.0.0.1 for client connection
-    let state_addr = format!("127.0.0.1:{}", state_server.local_addr().port()).parse().unwrap();
+    let _state_handle = start_state_server(local_state.clone(), state_port)
+        .await
+        .expect("Failed to start gRPC state server");
 
-    tokio::spawn(state_server.run());
-
-    let rpc_state = RpcStateAccess::new(state_addr);
+    let grpc_state = GrpcStateAccess::new(format!("127.0.0.1:{}", state_port));
     let shutdown_signal = DummyShutdownSignal;
 
-    println!("\nStarting MapReduce...");
+    println!("\nStarting MapReduce with gRPC...");
 
     // Define types
     type MapperType = Mapper<
         WordSearchProblem,
-        RpcStateAccess,
-        RpcWorkChannel<<WordSearchProblem as MapReduceJob>::MapAssignment, RpcCompletionToken>,
+        GrpcStateAccess,
+        grpc_work_channel::GrpcWorkChannel<
+            <WordSearchProblem as MapReduceJob>::MapAssignment,
+            grpc_completion_signaling::GrpcCompletionToken,
+        >,
         MapperProcessRuntime,
         DummyShutdownSignal,
     >;
 
     type ReducerType = Reducer<
         WordSearchProblem,
-        RpcStateAccess,
-        RpcWorkChannel<
+        GrpcStateAccess,
+        grpc_work_channel::GrpcWorkChannel<
             <WordSearchProblem as MapReduceJob>::ReduceAssignment,
-            RpcCompletionToken,
+            grpc_completion_signaling::GrpcCompletionToken,
         >,
         ReducerProcessRuntime,
         DummyShutdownSignal,
@@ -146,11 +147,11 @@ async fn run_coordinator() {
     // Create mapper factory
     let mapper_factory = MapperFactory::<
         WordSearchProblem,
-        RpcStateAccess,
+        GrpcStateAccess,
         MapperProcessRuntime,
         DummyShutdownSignal,
     >::new(
-        rpc_state.clone(),
+        grpc_state.clone(),
         shutdown_signal.clone(),
         config.mapper_failure_probability,
         config.mapper_straggler_probability,
@@ -158,20 +159,22 @@ async fn run_coordinator() {
     );
 
     // Initialize mapper phase
-    let (mappers, mut mapper_executor) = initialize_phase::<MapperType, RpcCompletionSignaling, _>(
+    let (mappers, mut mapper_executor) = initialize_phase::<MapperType, GrpcCompletionSignaling, _>(
         config.num_mappers,
         mapper_factory,
         config.mapper_timeout_ms,
     );
 
+    println!("Workers initialized, starting map phase...");
+
     // Create reducer factory
     let reducer_factory = ReducerFactory::<
         WordSearchProblem,
-        RpcStateAccess,
+        GrpcStateAccess,
         ReducerProcessRuntime,
         DummyShutdownSignal,
     >::new(
-        rpc_state.clone(),
+        grpc_state.clone(),
         shutdown_signal.clone(),
         config.reducer_failure_probability,
         config.reducer_straggler_probability,
@@ -179,11 +182,14 @@ async fn run_coordinator() {
     );
 
     // Initialize reducer phase
-    let (reducers, mut reducer_executor) = initialize_phase::<ReducerType, RpcCompletionSignaling, _>(
-        config.num_reducers,
-        reducer_factory,
-        config.reducer_timeout_ms,
-    );
+    let (reducers, mut reducer_executor) =
+        initialize_phase::<ReducerType, GrpcCompletionSignaling, _>(
+            config.num_reducers,
+            reducer_factory,
+            config.reducer_timeout_ms,
+        );
+
+    println!("Reducers initialized, starting reduce phase...");
 
     let context = WordSearchContext {
         targets: targets.clone(),
