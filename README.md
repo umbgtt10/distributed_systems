@@ -1,6 +1,6 @@
 # Distributed Systems in Rust
 
-A collection of distributed systems implementations in Rust, inspired by MIT's legendary [6.824: Distributed Systems](https://pdos.csail.mit.edu/6.824/) course.
+A collection of distributed systems implementations in Rust, inspired by MIT's legendary [6.824: Distributed Systems](https://pdos.csail.mit.edu/6.824/schedule.html) course.
 
 ## Motivation
 

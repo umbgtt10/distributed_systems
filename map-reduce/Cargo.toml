@@ -6,6 +6,7 @@ members = [
     "task-channels",
     "thread-socket",
     "process-rpc",
+    "proto-rpc-tonic",
 ]
 
 [workspace.dependencies]

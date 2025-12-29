@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package mapreduce;
+
+// State Service - Manages shared state across workers
+service StateService {
+  rpc Initialize(InitializeRequest) returns (StateResponse);
+  rpc Update(UpdateRequest) returns (StateResponse);
+  rpc Replace(ReplaceRequest) returns (StateResponse);
+  rpc Get(GetRequest) returns (GetResponse);
+}
+
+// Work Service - Receives work assignments from coordinator
+service WorkService {
+  rpc ReceiveWork(WorkMessage) returns (WorkAck);
+}
+
+// Completion Service - Workers report completion to coordinator
+service CompletionService {
+  rpc ReportCompletion(CompletionMessage) returns (CompletionAck);
+}
+
+// State Service Messages
+message InitializeRequest {
+  repeated string keys = 1;
+}
+
+message UpdateRequest {
+  string key = 1;
+  int32 value = 2;
+}
+
+message ReplaceRequest {
+  string key = 1;
+  int32 value = 2;
+}
+
+message GetRequest {
+  string key = 1;
+}
+
+message GetResponse {
+  repeated int32 values = 1;
+}
+
+message StateResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// Work Service Messages
+message WorkMessage {
+  string assignment_json = 1;  // JSON-serialized assignment (hybrid approach)
+  string completion_json = 2;  // JSON-serialized completion token
+}
+
+message WorkAck {
+  bool received = 1;
+}
+
+// Completion Service Messages
+message CompletionMessage {
+  uint64 worker_id = 1;
+  bool success = 2;
+}
+
+message CompletionAck {
+  bool received = 1;
+}

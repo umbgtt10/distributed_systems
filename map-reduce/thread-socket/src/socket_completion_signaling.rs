@@ -28,8 +28,8 @@ impl SocketCompletionSignaling {
 
         for i in 0..num_workers {
             // Use port 0 to let OS assign an available port
-            let std_listener =
-                std::net::TcpListener::bind("127.0.0.1:0").expect("Failed to bind completion listener");
+            let std_listener = std::net::TcpListener::bind("127.0.0.1:0")
+                .expect("Failed to bind completion listener");
             std_listener
                 .set_nonblocking(true)
                 .expect("Failed to set nonblocking");
@@ -46,10 +46,7 @@ impl SocketCompletionSignaling {
             ports.insert(i, actual_port);
         }
 
-        Self {
-            listeners,
-            ports,
-        }
+        Self { listeners, ports }
     }
 
     pub fn get_sender(&self, worker_id: usize) -> SocketCompletionToken {
@@ -104,7 +101,6 @@ impl CompletionSignaling for SocketCompletionSignaling {
         while let Some((_worker_id, connection_result)) = self.listeners.next().await {
             match connection_result {
                 Ok(mut stream) => {
-
                     let mut len_bytes = [0u8; 4];
                     if stream.read_exact(&mut len_bytes).await.is_ok() {
                         let len = u32::from_be_bytes(len_bytes) as usize;
@@ -143,18 +139,15 @@ impl CompletionSenderTrait for SocketCompletionToken {
             Ok(id) => CompletionMessage::Success(id),
             Err(_) => CompletionMessage::Failure(self.worker_id),
         };
-        match tokio::net::TcpStream::connect(&addr).await {
-            Ok(mut stream) => {
-                if let Ok(serialized) = serde_json::to_vec(&message) {
-                    let len = serialized.len() as u32;
-                    if stream.write_all(&len.to_be_bytes()).await.is_ok() {
-                        if stream.write_all(&serialized).await.is_ok() {
-                            return true;
-                        }
-                    }
+        if let Ok(mut stream) = tokio::net::TcpStream::connect(&addr).await {
+            if let Ok(serialized) = serde_json::to_vec(&message) {
+                let len = serialized.len() as u32;
+                if stream.write_all(&len.to_be_bytes()).await.is_ok()
+                    && stream.write_all(&serialized).await.is_ok()
+                {
+                    return true;
                 }
             }
-            Err(_) => {}
         }
         false
     }
