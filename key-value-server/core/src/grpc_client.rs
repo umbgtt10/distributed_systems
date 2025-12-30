@@ -144,6 +144,35 @@ async fn perform_put(
     let mut network_retry_count = 0;
 
     loop {
+        // Simulate client-side packet loss BEFORE sending request
+        if fastrand::f32() < (config.client_packet_loss_rate / 100.0) {
+            network_retry_count += 1;
+            println!(
+                "[{}][{}] PUT '{}' -> CLIENT PACKET LOSS (request not sent)",
+                config.name, op_num, key
+            );
+
+            if network_retry_count >= max_retries {
+                println!(
+                    "[{}][{}] PUT '{}' -> CLIENT PACKET LOSS after {} attempts, giving up",
+                    config.name, op_num, key, network_retry_count
+                );
+                sleep(Duration::from_millis(config.error_sleep_ms)).await;
+                return;
+            }
+
+            if cancellation_token.is_cancelled() {
+                println!(
+                    "[{}][{}] PUT '{}' -> CANCELLED during client packet loss retry",
+                    config.name, op_num, key
+                );
+                return;
+            }
+
+            sleep(Duration::from_millis(config.error_sleep_ms)).await;
+            continue;
+        }
+
         let request = tonic::Request::new(PutRequest {
             key: key.to_string(),
             value: value.clone(),
@@ -203,6 +232,9 @@ async fn perform_put(
                                             "[{}][{}] PUT '{}' -> RECOVERED after {} network {} (write succeeded, detected via version_mismatch, server version={})",
                                             config.name, op_num, key, retry_count_for_log, retry_word, actual_version
                                         );
+                                        // Recovery detected - the previous write succeeded, we're done!
+                                        sleep(Duration::from_millis(config.success_sleep_ms)).await;
+                                        return;
                                     }
                                     version = actual_version;
                                     println!("[{}][{}] PUT '{}' -> RETRY (version_mismatch, using version={})", config.name, op_num, key, version);

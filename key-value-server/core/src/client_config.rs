@@ -5,6 +5,8 @@ pub struct ClientConfig {
     pub name: String,
     pub success_sleep_ms: u64,
     pub error_sleep_ms: u64,
+    #[serde(default)]
+    pub client_packet_loss_rate: f32,
     pub keys: Vec<String>,
 }
 
