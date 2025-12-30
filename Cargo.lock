@@ -516,7 +516,6 @@ dependencies = [
  "async-trait",
  "key-value-server-core",
  "tokio",
- "tonic",
 ]
 
 [[package]]

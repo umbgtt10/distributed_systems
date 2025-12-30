@@ -9,6 +9,5 @@ path = "src/main.rs"
 
 [dependencies]
 key-value-server-core = { path = "../core" }
-tokio = { workspace = true }
-tonic = { workspace = true }
 async-trait = { workspace = true }
+tokio = { workspace = true }

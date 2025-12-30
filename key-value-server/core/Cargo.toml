@@ -4,19 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { workspace = true }
 async-trait = { workspace = true }
-tokio-util = { workspace = true }
-fastrand = "2.3"
+fastrand = { workspace = true }
+prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-
-# gRPC dependencies
+socket2 = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
 tonic = { workspace = true }
 tonic-prost = { workspace = true }
-prost = { workspace = true }
-tokio-stream = { workspace = true }
-socket2 = "0.6.1"
 
 [build-dependencies]
 tonic-build = { workspace = true }
