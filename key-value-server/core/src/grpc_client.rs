@@ -152,6 +152,10 @@ async fn perform_put(
 
         match client.put(request).await {
             Ok(response) => {
+                // Save network retry count before resetting for recovery detection
+                let had_network_errors = network_retry_count > 0;
+                let retry_count_for_log = network_retry_count;
+
                 // Network is working - reset retry counter
                 network_retry_count = 0;
 
@@ -159,10 +163,15 @@ async fn perform_put(
                 match result {
                     Some(put_response::Result::Success(success)) => {
                         let operation = if version == 0 { "CREATE" } else { "UPDATE" };
-                        if network_retry_count > 0 {
+                        if had_network_errors {
+                            let retry_word = if retry_count_for_log == 1 {
+                                "retry"
+                            } else {
+                                "retries"
+                            };
                             println!(
-                                "[{}][{}] PUT '{}' -> {} RECOVERED after {} network retries (value='{}', new_version={})",
-                                config.name, op_num, key, operation, network_retry_count, value, success.new_version
+                                "[{}][{}] PUT '{}' -> {} RECOVERED after {} network {} (value='{}', new_version={})",
+                                config.name, op_num, key, operation, retry_count_for_log, retry_word, value, success.new_version
                             );
                         } else {
                             println!(
@@ -184,12 +193,16 @@ async fn perform_put(
                                 // X is the server's current version, Y is what client sent
                                 if let Some(actual_version) = extract_actual_version(&error.message)
                                 {
-                                    if network_retry_count > 0 {
+                                    if had_network_errors {
+                                        let retry_word = if retry_count_for_log == 1 {
+                                            "retry"
+                                        } else {
+                                            "retries"
+                                        };
                                         println!(
-                                            "[{}][{}] PUT '{}' -> RECOVERED after {} network retries (write succeeded, detected via version_mismatch, server version={})",
-                                            config.name, op_num, key, network_retry_count, actual_version
+                                            "[{}][{}] PUT '{}' -> RECOVERED after {} network {} (write succeeded, detected via version_mismatch, server version={})",
+                                            config.name, op_num, key, retry_count_for_log, retry_word, actual_version
                                         );
-                                        network_retry_count = 0;
                                     }
                                     version = actual_version;
                                     println!("[{}][{}] PUT '{}' -> RETRY (version_mismatch, using version={})", config.name, op_num, key, version);
