@@ -1,5 +1,7 @@
 {
   "test_duration_seconds": 30,
+  "server_packet_loss_rate": 5,
+  "max_retries_server_packet_loss": 10,
   "clients": [
     {
       "name": "client_1",

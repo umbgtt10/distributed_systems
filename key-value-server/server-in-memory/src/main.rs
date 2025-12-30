@@ -2,7 +2,8 @@ mod in_memory_storage;
 
 use crate::in_memory_storage::InMemoryStorage;
 use key_value_server_core::{
-    rpc::proto::kv_service_server::KvServiceServer, GrpcClient, KeyValueServer, Storage, TestConfig,
+    rpc::proto::kv_service_server::KvServiceServer, GrpcClient, KeyValueServer, PacketLossWrapper,
+    Storage, TestConfig,
 };
 use tonic::transport::Server;
 
@@ -14,15 +15,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let test_config = TestConfig::from_file(config_path.to_str().unwrap())?;
 
     println!(
-        "Loaded config: {} clients, {} second test duration",
+        "Loaded config: {} clients, {} second test duration, {:.1}% packet loss",
         test_config.clients.len(),
-        test_config.test_duration_seconds
+        test_config.test_duration_seconds,
+        test_config.server_packet_loss_rate
     );
 
     let addr = "127.0.0.1:50051".parse()?;
     let storage = InMemoryStorage::new();
     let storage_clone = storage.clone();
-    let service = KeyValueServer::new(storage);
+    let base_service = KeyValueServer::new(storage);
+
+    // Wrap with packet loss simulation (no-op if rate is 0)
+    // Convert percentage (5) to rate (0.05)
+    let service = PacketLossWrapper::new(base_service, test_config.server_packet_loss_rate / 100.0);
 
     println!("KV Server listening on {}", addr);
     println!("Press Ctrl+C to stop the server\n");
@@ -32,7 +38,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut client_cancellations = Vec::new();
 
     for client_config in test_config.clients.clone() {
-        let client = GrpcClient::new(client_config, "http://127.0.0.1:50051".to_string());
+        let client = GrpcClient::new(
+            client_config,
+            "http://127.0.0.1:50051".to_string(),
+            test_config.max_retries_server_packet_loss,
+        );
         let cancellation = client.cancellation_token();
         client_cancellations.push(cancellation);
 

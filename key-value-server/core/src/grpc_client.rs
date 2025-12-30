@@ -10,14 +10,16 @@ use tokio_util::sync::CancellationToken;
 pub struct GrpcClient {
     config: ClientConfig,
     server_address: String,
+    max_retries: u32,
     cancellation_token: CancellationToken,
 }
 
 impl GrpcClient {
-    pub fn new(config: ClientConfig, server_address: String) -> Self {
+    pub fn new(config: ClientConfig, server_address: String, max_retries: u32) -> Self {
         Self {
             config,
             server_address,
+            max_retries,
             cancellation_token: CancellationToken::new(),
         }
     }
@@ -58,7 +60,15 @@ impl GrpcClient {
             if is_get {
                 perform_get(&mut client, &self.config, key, operation_count).await;
             } else {
-                perform_put(&mut client, &self.config, key, operation_count).await;
+                perform_put(
+                    &mut client,
+                    &self.config,
+                    key,
+                    operation_count,
+                    self.max_retries,
+                    &self.cancellation_token,
+                )
+                .await;
             }
         }
 
@@ -109,7 +119,10 @@ async fn perform_get(
         Err(status) => {
             println!(
                 "[{}][{}] GET '{}' -> NETWORK ERROR ({})",
-                config.name, op_num, key, status
+                config.name,
+                op_num,
+                key,
+                status.message()
             );
             sleep(Duration::from_millis(config.error_sleep_ms)).await;
         }
@@ -121,13 +134,14 @@ async fn perform_put(
     config: &ClientConfig,
     key: &str,
     op_num: u64,
+    max_retries: u32,
+    cancellation_token: &CancellationToken,
 ) {
     let value = format!("value_{}", fastrand::u32(..));
 
     // Start with version 0 (create), will be adjusted on version mismatch
     let mut version = 0;
-    let mut retry_count = 0;
-    const MAX_RETRIES: u32 = 3;
+    let mut network_retry_count = 0;
 
     loop {
         let request = tonic::Request::new(PutRequest {
@@ -138,14 +152,24 @@ async fn perform_put(
 
         match client.put(request).await {
             Ok(response) => {
+                // Network is working - reset retry counter
+                network_retry_count = 0;
+
                 let result = response.into_inner().result;
                 match result {
                     Some(put_response::Result::Success(success)) => {
                         let operation = if version == 0 { "CREATE" } else { "UPDATE" };
-                        println!(
-                            "[{}][{}] PUT '{}' -> {} (value='{}', new_version={})",
-                            config.name, op_num, key, operation, value, success.new_version
-                        );
+                        if network_retry_count > 0 {
+                            println!(
+                                "[{}][{}] PUT '{}' -> {} RECOVERED after {} network retries (value='{}', new_version={})",
+                                config.name, op_num, key, operation, network_retry_count, value, success.new_version
+                            );
+                        } else {
+                            println!(
+                                "[{}][{}] PUT '{}' -> {} (value='{}', new_version={})",
+                                config.name, op_num, key, operation, value, success.new_version
+                            );
+                        }
                         sleep(Duration::from_millis(config.success_sleep_ms)).await;
                         return;
                     }
@@ -155,15 +179,6 @@ async fn perform_put(
 
                         match error_type {
                             ErrorType::VersionMismatch => {
-                                retry_count += 1;
-                                if retry_count >= MAX_RETRIES {
-                                    println!(
-                                        "[{}][{}] PUT '{}' -> FAILED after {} retries ({})",
-                                        config.name, op_num, key, retry_count, error.message
-                                    );
-                                    sleep(Duration::from_millis(config.error_sleep_ms)).await;
-                                    return;
-                                }
                                 // Extract actual version from error message and increment
                                 // Message format: "Version mismatch: expected X, got Y"
                                 if let Some(actual_version) = extract_actual_version(&error.message)
@@ -180,7 +195,6 @@ async fn perform_put(
                                     config.name, op_num, key
                                 );
                                 version = 1; // Start with version 1 and retry
-                                retry_count += 1;
                                 continue;
                             }
                             ErrorType::KeyNotFound => {
@@ -190,7 +204,6 @@ async fn perform_put(
                                     config.name, op_num, key
                                 );
                                 version = 0;
-                                retry_count += 1;
                                 continue;
                             }
                         }
@@ -213,12 +226,40 @@ async fn perform_put(
                 }
             }
             Err(status) => {
+                network_retry_count += 1;
+                if network_retry_count >= max_retries {
+                    println!(
+                        "[{}][{}] PUT '{}' -> NETWORK ERROR after {} retries ({})",
+                        config.name,
+                        op_num,
+                        key,
+                        network_retry_count,
+                        status.message()
+                    );
+                    sleep(Duration::from_millis(config.error_sleep_ms)).await;
+                    return;
+                }
+
+                // Check for cancellation before retrying
+                if cancellation_token.is_cancelled() {
+                    println!(
+                        "[{}][{}] PUT '{}' -> CANCELLED during network retry",
+                        config.name, op_num, key
+                    );
+                    return;
+                }
+
                 println!(
-                    "[{}][{}] PUT '{}' -> NETWORK ERROR ({})",
-                    config.name, op_num, key, status
+                    "[{}][{}] PUT '{}' -> NETWORK ERROR, retrying... (attempt {}/{}): {}",
+                    config.name,
+                    op_num,
+                    key,
+                    network_retry_count,
+                    max_retries,
+                    status.message()
                 );
                 sleep(Duration::from_millis(config.error_sleep_ms)).await;
-                return;
+                continue;
             }
         }
     }

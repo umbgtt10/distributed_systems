@@ -11,7 +11,15 @@ pub struct ClientConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TestConfig {
     pub test_duration_seconds: u64,
+    #[serde(default)]
+    pub server_packet_loss_rate: f32,
+    #[serde(default = "default_max_retries_server_packet_loss")]
+    pub max_retries_server_packet_loss: u32,
     pub clients: Vec<ClientConfig>,
+}
+
+fn default_max_retries_server_packet_loss() -> u32 {
+    10
 }
 
 impl TestConfig {
