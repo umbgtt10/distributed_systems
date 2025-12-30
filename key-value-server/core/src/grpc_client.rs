@@ -179,23 +179,54 @@ async fn perform_put(
 
                         match error_type {
                             ErrorType::VersionMismatch => {
-                                // Extract actual version from error message and increment
+                                // Extract actual version from error message
                                 // Message format: "Version mismatch: expected X, got Y"
+                                // X is the server's current version, Y is what client sent
                                 if let Some(actual_version) = extract_actual_version(&error.message)
                                 {
+                                    if network_retry_count > 0 {
+                                        println!(
+                                            "[{}][{}] PUT '{}' -> RECOVERED after {} network retries (write succeeded, detected via version_mismatch, server version={})",
+                                            config.name, op_num, key, network_retry_count, actual_version
+                                        );
+                                        network_retry_count = 0;
+                                    }
                                     version = actual_version;
                                     println!("[{}][{}] PUT '{}' -> RETRY (version_mismatch, using version={})", config.name, op_num, key, version);
                                     continue;
                                 }
                             }
                             ErrorType::KeyAlreadyExists => {
-                                // Key exists but we tried to create, switch to update
+                                // Key exists but we tried to create - fetch actual version with GET
                                 println!(
-                                    "[{}][{}] PUT '{}' -> KEY_EXISTS (switching to update mode)",
+                                    "[{}][{}] PUT '{}' -> KEY_EXISTS (fetching current version)",
                                     config.name, op_num, key
                                 );
-                                version = 1; // Start with version 1 and retry
-                                continue;
+
+                                // Do a GET to fetch the current version
+                                let get_request = tonic::Request::new(GetRequest {
+                                    key: key.to_string(),
+                                });
+
+                                match client.get(get_request).await {
+                                    Ok(get_response) => {
+                                        if let Some(get_response::Result::Success(success)) =
+                                            get_response.into_inner().result
+                                        {
+                                            version = success.version;
+                                            println!(
+                                                "[{}][{}] PUT '{}' -> Fetched version={}, switching to update mode",
+                                                config.name, op_num, key, version
+                                            );
+                                            continue;
+                                        }
+                                    }
+                                    Err(_) => {
+                                        // If GET fails, fall back to version 1
+                                        version = 1;
+                                        continue;
+                                    }
+                                }
                             }
                             ErrorType::KeyNotFound => {
                                 // Key doesn't exist, try to create
