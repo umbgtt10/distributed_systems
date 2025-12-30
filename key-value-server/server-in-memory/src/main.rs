@@ -11,7 +11,7 @@ use tonic::transport::Server;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load test configuration - use path relative to workspace root
     let workspace_root = std::env::current_dir()?;
-    let config_path = workspace_root.join("core/config.json");
+    let config_path = workspace_root.join("config.json");
     let test_config = TestConfig::from_file(config_path.to_str().unwrap())?;
 
     println!(

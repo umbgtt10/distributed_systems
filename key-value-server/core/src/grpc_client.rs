@@ -227,11 +227,8 @@ async fn perform_put(
 
                         match error_type {
                             ErrorType::VersionMismatch => {
-                                // Extract actual version from error message
-                                // Message format: "Version mismatch: expected X, got Y"
-                                // X is the server's current version, Y is what client sent
-                                if let Some(actual_version) = extract_actual_version(&error.message)
-                                {
+                                // Use the structured actual_version field from the error
+                                if let Some(actual_version) = error.actual_version {
                                     if had_network_errors {
                                         let retry_word = if retry_count_for_log == 1 {
                                             "retry"
@@ -249,6 +246,11 @@ async fn perform_put(
                                     version = actual_version;
                                     println!("[{}][{}] PUT '{}' -> RETRY (version_mismatch, using version={})", config.name, op_num, key, version);
                                     continue;
+                                } else {
+                                    println!(
+                                        "[{}][{}] PUT '{}' -> ERROR (VersionMismatch without actual_version)",
+                                        config.name, op_num, key
+                                    );
                                 }
                             }
                             ErrorType::KeyAlreadyExists => {
@@ -348,15 +350,5 @@ async fn perform_put(
                 continue;
             }
         }
-    }
-}
-
-fn extract_actual_version(message: &str) -> Option<u64> {
-    // Parse "Version mismatch: expected X, got Y" to extract Y (actual version)
-    let parts: Vec<&str> = message.split(", got ").collect();
-    if parts.len() == 2 {
-        parts[1].parse::<u64>().ok()
-    } else {
-        None
     }
 }

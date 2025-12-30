@@ -29,7 +29,8 @@ Pop-Location
 # Start the server in background (server spawns its own client)
 Write-Host ""
 Write-Host "Starting KV server with embedded client..." -ForegroundColor Green
-$ServerProcess = Start-Process -FilePath "$ProjectRoot\target\release\key-value-server-in-memory.exe" -PassThru -NoNewWindow
+
+$ServerProcess = Start-Process -FilePath "$ProjectRoot\target\release\key-value-server-in-memory.exe" -WorkingDirectory "$ProjectRoot" -PassThru -NoNewWindow
 Start-Sleep -Seconds 2
 
 if ($ServerProcess.HasExited) {

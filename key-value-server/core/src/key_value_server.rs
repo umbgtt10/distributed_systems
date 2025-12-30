@@ -53,6 +53,7 @@ impl<S: Storage + 'static> KvService for KeyValueServer<S> {
                 result: Some(put_response::Result::Error(PutError {
                     error_type: ErrorType::KeyAlreadyExists as i32,
                     message: format!("Key '{}' already exists", req.key),
+                    actual_version: None,
                 })),
             })),
             Err(StorageError::VersionMismatch { expected, actual }) => {
@@ -60,6 +61,7 @@ impl<S: Storage + 'static> KvService for KeyValueServer<S> {
                     result: Some(put_response::Result::Error(PutError {
                         error_type: ErrorType::VersionMismatch as i32,
                         message: format!("Version mismatch: expected {}, got {}", actual, expected),
+                        actual_version: Some(actual),
                     })),
                 }))
             }
@@ -67,6 +69,7 @@ impl<S: Storage + 'static> KvService for KeyValueServer<S> {
                 result: Some(put_response::Result::Error(PutError {
                     error_type: ErrorType::KeyNotFound as i32,
                     message: format!("Key '{}' not found", req.key),
+                    actual_version: None,
                 })),
             })),
         }
