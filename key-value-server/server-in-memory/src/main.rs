@@ -1,12 +1,14 @@
-mod key_value_service;
+mod in_memory_storage;
 
-use crate::key_value_service::{rpc::proto::kv_service_server::KvServiceServer, KvServiceImpl};
+use crate::in_memory_storage::InMemoryStorage;
+use key_value_server_core::{rpc::proto::kv_service_server::KvServiceServer, KeyValueServer};
 use tonic::transport::Server;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = "127.0.0.1:50051".parse()?;
-    let service = KvServiceImpl::new();
+    let storage = InMemoryStorage::new();
+    let service = KeyValueServer::new(storage);
 
     println!("KV Server listening on {}", addr);
     println!("Press Ctrl+C to stop the server");

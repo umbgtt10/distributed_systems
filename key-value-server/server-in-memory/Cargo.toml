@@ -8,15 +8,6 @@ name = "key-value-server-in-memory"
 path = "src/main.rs"
 
 [dependencies]
+key-value-server-core = { path = "../core" }
 tokio = { workspace = true }
-
-# gRPC dependencies
 tonic = { workspace = true }
-tonic-prost = { workspace = true }
-prost = { workspace = true }
-tokio-stream = { workspace = true }
-socket2 = "0.6.1"
-
-[build-dependencies]
-tonic-build = { workspace = true }
-tonic-prost-build = { workspace = true }

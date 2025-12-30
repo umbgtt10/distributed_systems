@@ -491,6 +491,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
+name = "key-value-server-core"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "socket2",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
 name = "key-value-server-grpc-client"
 version = "0.1.0"
 dependencies = [
@@ -511,14 +525,9 @@ dependencies = [
 name = "key-value-server-in-memory"
 version = "0.1.0"
 dependencies = [
- "prost",
- "socket2",
+ "key-value-server-core",
  "tokio",
- "tokio-stream",
  "tonic",
- "tonic-build",
- "tonic-prost",
- "tonic-prost-build",
 ]
 
 [[package]]

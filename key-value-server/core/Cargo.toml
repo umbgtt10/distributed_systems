@@ -1,0 +1,18 @@
+[package]
+name = "key-value-server-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+
+# gRPC dependencies
+tonic = { workspace = true }
+tonic-prost = { workspace = true }
+prost = { workspace = true }
+tokio-stream = { workspace = true }
+socket2 = "0.6.1"
+
+[build-dependencies]
+tonic-build = { workspace = true }
+tonic-prost-build = { workspace = true }
