@@ -3,15 +3,17 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use key_value_server_core::{Storage, StorageError};
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, path::Path, sync::Arc};
 use tokio::{
-    fs::File,
+    fs::{File, OpenOptions},
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
+    sync::Mutex,
 };
 
 #[derive(Clone)]
 pub struct FlatFileStorage {
     file_path: String,
+    mutex: Arc<Mutex<()>>,
 }
 
 impl FlatFileStorage {
@@ -22,7 +24,10 @@ impl FlatFileStorage {
                 .expect("Failed to create file");
         }
 
-        Self { file_path }
+        Self {
+            file_path,
+            mutex: Arc::new(Mutex::new(())),
+        }
     }
 
     async fn get(&self, key: &str) -> Option<(String, u64)> {
@@ -53,6 +58,7 @@ impl FlatFileStorage {
 #[async_trait::async_trait]
 impl Storage for FlatFileStorage {
     async fn get(&self, key: &str) -> Result<(String, u64), StorageError> {
+        let _lock = self.mutex.lock().await;
         let entry = self.get(key).await;
         if let Some((value, version)) = entry {
             return Ok((value, version));
@@ -67,15 +73,14 @@ impl Storage for FlatFileStorage {
         value: String,
         expected_version: u64,
     ) -> Result<u64, StorageError> {
+        let _lock = self.mutex.lock().await;
+        let entry = self.get(key).await;
         if expected_version == 0 {
-            // Create new key
-            let entry = self.get(key).await;
-
             if entry.is_some() {
                 return Err(StorageError::KeyAlreadyExists(key.to_string()));
             }
 
-            let file = tokio::fs::OpenOptions::new()
+            let file = OpenOptions::new()
                 .append(true)
                 .open(&self.file_path)
                 .await
@@ -91,7 +96,7 @@ impl Storage for FlatFileStorage {
 
             Ok(1)
         } else {
-            match self.get(key).await {
+            match entry {
                 Some((_, current_version)) => {
                     if current_version == expected_version {
                         let new_version = expected_version + 1;
@@ -118,14 +123,14 @@ impl Storage for FlatFileStorage {
                         }
 
                         // Truncate and rewrite the file
-                        let file = tokio::fs::OpenOptions::new()
+                        let file = OpenOptions::new()
                             .write(true)
                             .truncate(true)
                             .open(&self.file_path)
                             .await
                             .expect("Failed to open file for write");
                         file.set_len(0).await.expect("Failed to truncate file");
-                        let mut writer = tokio::io::BufWriter::new(file);
+                        let mut writer = BufWriter::new(file);
                         for line in lines {
                             writer
                                 .write_all(line.as_bytes())
@@ -152,6 +157,7 @@ impl Storage for FlatFileStorage {
     }
 
     async fn print_all(&self) {
+        let _lock = self.mutex.lock().await;
         let file = File::open(&self.file_path)
             .await
             .expect("Failed to open file for read");
