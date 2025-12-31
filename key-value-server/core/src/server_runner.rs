@@ -2,10 +2,13 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
+use crate::rpc::proto::kv_service_client::KvServiceClient;
 use crate::rpc::proto::kv_service_server::KvServiceServer;
-use crate::{FastrandRandom, GrpcClient, KeyValueServer, PacketLossWrapper, Storage, TestConfig, TokioTimer};
+use crate::{
+    FastrandRandom, GrpcClient, KeyValueServer, PacketLossWrapper, Storage, TestConfig, TokioTimer,
+};
 use std::net::SocketAddr;
-use tonic::transport::Server;
+use tonic::transport::{Channel, Server};
 
 /// Generic server runner that handles all the boilerplate for running a KV server
 /// with multiple clients, packet loss simulation, and graceful shutdown.
@@ -61,17 +64,20 @@ impl<S: Storage + Clone + 'static> ServerRunner<S> {
         let mut client_cancellations = Vec::new();
 
         for client_config in self.config.clients.clone() {
-            let client = GrpcClient::new(
-                client_config,
-                format!("http://{}", self.addr),
-                self.config.max_retries_server_packet_loss,
-                TokioTimer,
-                FastrandRandom,
-            );
+            let client =
+                GrpcClient::<TokioTimer, FastrandRandom, KvServiceClient<Channel>>::connect(
+                    client_config,
+                    format!("http://{}", self.addr),
+                    self.config.max_retries_server_packet_loss,
+                    TokioTimer,
+                    FastrandRandom,
+                )
+                .await?;
             let cancellation = client.cancellation_token();
             client_cancellations.push(cancellation);
 
             let client_handle = tokio::spawn(async move {
+                let mut client = client;
                 // Give the server time to start
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 if let Err(e) = client.start().await {

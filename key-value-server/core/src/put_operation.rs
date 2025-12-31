@@ -3,11 +3,8 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    rpc::proto::{
-        get_response, kv_service_client::KvServiceClient, put_response, ErrorType, GetRequest,
-        PutRequest,
-    },
-    ClientConfig, Random, Timer,
+    rpc::proto::{get_response, put_response, ErrorType, GetRequest, PutRequest},
+    ClientConfig, KvClient, Random, Timer,
 };
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
@@ -60,10 +57,7 @@ impl<'a, T: Timer, R: Random> PutOperation<'a, T, R> {
         }
     }
 
-    pub async fn execute(
-        mut self,
-        client: &mut KvServiceClient<tonic::transport::Channel>,
-    ) -> Result<(), ()> {
+    pub async fn execute(mut self, client: &mut dyn KvClient) -> Result<(), ()> {
         loop {
             if self.cancellation_token.is_cancelled() {
                 println!(

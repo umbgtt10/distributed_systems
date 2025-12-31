@@ -3,7 +3,8 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    ClientConfig, Random, Timer, rpc::proto::{ErrorType, GetRequest, get_response, kv_service_client::KvServiceClient}
+    rpc::proto::{get_response, ErrorType, GetRequest},
+    ClientConfig, KvClient, Random, Timer,
 };
 use std::time::Duration;
 
@@ -32,7 +33,7 @@ impl<'a, T: Timer, R: Random> GetOperation<'a, T, R> {
         }
     }
 
-    pub async fn execute(self, client: &mut KvServiceClient<tonic::transport::Channel>) {
+    pub async fn execute(self, client: &mut dyn KvClient) {
         // Simulate client-side packet loss BEFORE sending request
         if self.random.f32() < (self.config.client_packet_loss_rate / 100.0) {
             println!(

@@ -20,6 +20,9 @@ pub use get_operation::GetOperation;
 mod put_operation;
 pub use put_operation::PutOperation;
 
+mod kv_client;
+pub use kv_client::KvClient;
+
 pub mod random;
 pub use random::Random;
 
