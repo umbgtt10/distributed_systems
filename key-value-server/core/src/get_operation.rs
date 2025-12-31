@@ -3,9 +3,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    grpc_client::{Random, Timer},
-    rpc::proto::{get_response, kv_service_client::KvServiceClient, ErrorType, GetRequest},
-    ClientConfig,
+    ClientConfig, Random, Timer, rpc::proto::{ErrorType, GetRequest, get_response, kv_service_client::KvServiceClient}
 };
 use std::time::Duration;
 

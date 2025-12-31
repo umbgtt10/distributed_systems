@@ -3,48 +3,8 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::rpc::proto::kv_service_client::KvServiceClient;
-use crate::{ClientConfig, GetOperation, PutOperation};
-use std::time::Duration;
-use tokio::time::sleep;
+use crate::{ClientConfig, FastrandRandom, GetOperation, PutOperation, Random, Timer, TokioTimer};
 use tokio_util::sync::CancellationToken;
-
-#[async_trait::async_trait]
-pub trait Timer: Send + Sync {
-    async fn sleep(&self, duration: Duration);
-}
-
-pub trait Random: Send + Sync {
-    fn usize(&self, range: std::ops::Range<usize>) -> usize;
-    fn bool(&self) -> bool;
-    fn u32(&self, range: std::ops::Range<u32>) -> u32;
-    fn f32(&self) -> f32;
-}
-
-pub struct TokioTimer;
-
-#[async_trait::async_trait]
-impl Timer for TokioTimer {
-    async fn sleep(&self, duration: Duration) {
-        sleep(duration).await;
-    }
-}
-
-pub struct FastrandRandom;
-
-impl Random for FastrandRandom {
-    fn usize(&self, range: std::ops::Range<usize>) -> usize {
-        fastrand::usize(range)
-    }
-    fn bool(&self) -> bool {
-        fastrand::bool()
-    }
-    fn u32(&self, range: std::ops::Range<u32>) -> u32 {
-        fastrand::u32(range)
-    }
-    fn f32(&self) -> f32 {
-        fastrand::f32()
-    }
-}
 
 pub struct GrpcClient<T: Timer = TokioTimer, R: Random = FastrandRandom> {
     config: ClientConfig,

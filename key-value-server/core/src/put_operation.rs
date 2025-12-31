@@ -3,12 +3,11 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    grpc_client::{Random, Timer},
     rpc::proto::{
         get_response, kv_service_client::KvServiceClient, put_response, ErrorType, GetRequest,
         PutRequest,
     },
-    ClientConfig,
+    ClientConfig, Random, Timer,
 };
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;

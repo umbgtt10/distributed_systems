@@ -2,9 +2,8 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::grpc_client::{FastrandRandom, TokioTimer};
 use crate::rpc::proto::kv_service_server::KvServiceServer;
-use crate::{GrpcClient, KeyValueServer, PacketLossWrapper, Storage, TestConfig};
+use crate::{FastrandRandom, GrpcClient, KeyValueServer, PacketLossWrapper, Storage, TestConfig, TokioTimer};
 use std::net::SocketAddr;
 use tonic::transport::Server;
 

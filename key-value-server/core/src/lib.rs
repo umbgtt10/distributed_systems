@@ -15,10 +15,16 @@ mod packet_loss_wrapper;
 pub use packet_loss_wrapper::PacketLossWrapper;
 
 mod get_operation;
-pub(crate) use get_operation::GetOperation;
+pub use get_operation::GetOperation;
 
 mod put_operation;
-pub(crate) use put_operation::PutOperation;
+pub use put_operation::PutOperation;
+
+pub mod random;
+pub use random::Random;
+
+pub mod fastrand_random;
+pub use fastrand_random::FastrandRandom;
 
 mod grpc_client;
 pub use grpc_client::GrpcClient;
@@ -28,6 +34,12 @@ pub use client_config::{ClientConfig, TestConfig};
 
 mod server_runner;
 pub use server_runner::ServerRunner;
+
+pub mod timer;
+pub use timer::Timer;
+
+pub mod tokio_timer;
+pub use tokio_timer::TokioTimer;
 
 pub mod rpc {
     pub mod proto {
