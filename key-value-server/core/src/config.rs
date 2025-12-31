@@ -15,7 +15,7 @@ pub struct ClientConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TestConfig {
+pub struct Config {
     pub test_duration_seconds: u64,
     #[serde(default)]
     pub server_packet_loss_rate: f32,
@@ -28,10 +28,10 @@ fn default_max_retries_server_packet_loss() -> u32 {
     10
 }
 
-impl TestConfig {
-    pub fn from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+impl Config {
+    pub fn load(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
-        let config: TestConfig = serde_json::from_str(&content)?;
+        let config: Config = serde_json::from_str(&content)?;
         Ok(config)
     }
 }

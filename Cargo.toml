@@ -6,7 +6,9 @@ members = [
     "map-reduce/task-channels",
     "map-reduce/thread-socket",
     "map-reduce/process-rpc",
+    "key-value-server/core",
     "key-value-server/server-in-memory",
+    "key-value-server/server-flat-file",
 ]
 
 [workspace.dependencies]

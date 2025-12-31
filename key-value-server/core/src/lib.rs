@@ -32,8 +32,8 @@ pub use fastrand_random::FastrandRandom;
 mod grpc_client;
 pub use grpc_client::GrpcClient;
 
-mod client_config;
-pub use client_config::{ClientConfig, TestConfig};
+mod config;
+pub use config::{ClientConfig, Config};
 
 mod server_runner;
 pub use server_runner::ServerRunner;

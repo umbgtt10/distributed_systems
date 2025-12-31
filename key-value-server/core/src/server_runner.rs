@@ -5,7 +5,7 @@
 use crate::rpc::proto::kv_service_client::KvServiceClient;
 use crate::rpc::proto::kv_service_server::KvServiceServer;
 use crate::{
-    FastrandRandom, GrpcClient, KeyValueServer, PacketLossWrapper, Storage, TestConfig, TokioTimer,
+    FastrandRandom, GrpcClient, KeyValueServer, PacketLossWrapper, Storage, Config, TokioTimer,
 };
 use std::net::SocketAddr;
 use tonic::transport::{Channel, Server};
@@ -14,7 +14,7 @@ use tonic::transport::{Channel, Server};
 /// with multiple clients, packet loss simulation, and graceful shutdown.
 pub struct ServerRunner<S: Storage> {
     storage: S,
-    config: TestConfig,
+    config: Config,
     addr: SocketAddr,
 }
 
@@ -27,15 +27,15 @@ impl<S: Storage + Clone + 'static> ServerRunner<S> {
     /// * `addr` - Server address (e.g., "127.0.0.1:50051")
     pub fn new(
         storage: S,
-        config_path: &str,
+        config: &Config,
         addr: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let config = TestConfig::from_file(config_path)?;
+
         let addr = addr.parse()?;
 
         Ok(Self {
             storage,
-            config,
+            config: config.clone(),
             addr,
         })
     }
@@ -55,6 +55,33 @@ impl<S: Storage + Clone + 'static> ServerRunner<S> {
         // Wrap with packet loss simulation (convert percentage to rate)
         let service =
             PacketLossWrapper::new(base_service, self.config.server_packet_loss_rate / 100.0);
+
+        // Spawn auto-shutdown timer
+        let test_duration = self.config.test_duration_seconds;
+        let (auto_shutdown_sender, auto_shutdown_receiver) = tokio::sync::oneshot::channel();
+
+        // Run server with shutdown handling (either Ctrl+C or auto-shutdown)
+        let shutdown_signal = async {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    println!("\nReceived Ctrl+C, shutting down...");
+                }
+                _ = auto_shutdown_receiver => {
+                    println!("Auto-shutdown triggered");
+                }
+            }
+        };
+
+        // Start the server
+        let server_handle = tokio::spawn(async move {
+            let server_future = Server::builder()
+                .add_service(KvServiceServer::new(service))
+                .serve_with_shutdown(self.addr, shutdown_signal);
+            let _ = server_future.await;
+        });
+
+        // Wait a bit for server to bind
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
         println!("KV Server listening on {}", self.addr);
         println!("Press Ctrl+C to stop the server\n");
@@ -87,13 +114,25 @@ impl<S: Storage + Clone + 'static> ServerRunner<S> {
             client_handles.push(client_handle);
         }
 
+        let client_cancellations_for_auto = client_cancellations.clone();
+
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_secs(test_duration + 1)).await;
+            println!(
+                "\n{} seconds elapsed, initiating shutdown...",
+                test_duration
+            );
+            for cancellation in client_cancellations_for_auto {
+                cancellation.cancel();
+            }
+            let _ = auto_shutdown_sender.send(());
+        });
+
         // Spawn auto-shutdown timer
         let test_duration = self.config.test_duration_seconds;
         let auto_shutdown_cancellations = client_cancellations.clone();
-        let shutdown_tx = tokio::sync::oneshot::channel();
-        let (auto_shutdown_sender, auto_shutdown_receiver) = shutdown_tx;
 
-        let auto_shutdown = tokio::spawn(async move {
+        tokio::spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_secs(test_duration + 1)).await;
             println!(
                 "\n{} seconds elapsed, initiating shutdown...",
@@ -102,30 +141,12 @@ impl<S: Storage + Clone + 'static> ServerRunner<S> {
             for cancellation in auto_shutdown_cancellations {
                 cancellation.cancel();
             }
-            let _ = auto_shutdown_sender.send(());
         });
 
-        // Run server with shutdown handling (either Ctrl+C or auto-shutdown)
-        let shutdown_signal = async {
-            tokio::select! {
-                _ = tokio::signal::ctrl_c() => {
-                    println!("\nReceived Ctrl+C, shutting down...");
-                }
-                _ = auto_shutdown_receiver => {
-                    println!("Auto-shutdown triggered");
-                }
-            }
-        };
-
-        let server_future = Server::builder()
-            .add_service(KvServiceServer::new(service))
-            .serve_with_shutdown(self.addr, shutdown_signal);
-
         // Wait for server to finish
-        let _ = server_future.await;
+        let _ = server_handle.await;
 
         // Cancel all clients (in case Ctrl+C was pressed before timer)
-        auto_shutdown.abort();
         for cancellation in client_cancellations {
             cancellation.cancel();
         }

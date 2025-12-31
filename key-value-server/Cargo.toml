@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "core",
     "server-in-memory",
+    "server-flat-file",
 ]
 
 [workspace.dependencies]

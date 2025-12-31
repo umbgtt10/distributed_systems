@@ -370,6 +370,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "key-value-server-flat-file"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "key-value-server-core",
+ "tokio",
+]
+
+[[package]]
 name = "key-value-server-in-memory"
 version = "0.1.0"
 dependencies = [
