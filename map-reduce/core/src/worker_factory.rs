@@ -20,4 +20,3 @@ where
         (self)(id)
     }
 }
-

@@ -80,4 +80,3 @@ impl WorkerSynchronization for ChannelWorkerSynchronization {
             })
     }
 }
-

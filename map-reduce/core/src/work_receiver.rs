@@ -12,4 +12,3 @@ pub trait WorkReceiver<A, C>: Send {
     /// Returns None if the channel is closed
     async fn recv(&mut self) -> Option<WorkerMessage<A, C>>;
 }
-

@@ -20,4 +20,3 @@ pub trait Worker: Send {
     /// Wait for the worker to shut down
     fn wait(self) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
-

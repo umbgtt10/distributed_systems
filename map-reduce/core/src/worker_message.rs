@@ -12,4 +12,3 @@ pub enum WorkerMessage<A, C> {
     /// Work assignment
     Work(A, C),
 }
-

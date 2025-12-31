@@ -130,4 +130,3 @@ impl WorkerSynchronization for SocketWorkerSynchronization {
         None
     }
 }
-

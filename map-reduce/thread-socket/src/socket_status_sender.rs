@@ -40,4 +40,3 @@ impl StatusSender for SocketStatusSender {
         false
     }
 }
-

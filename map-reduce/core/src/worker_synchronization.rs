@@ -30,4 +30,3 @@ pub trait WorkerSynchronization: Send {
     fn reset_worker(&mut self, worker_id: usize)
         -> impl Future<Output = Self::StatusSender> + Send;
 }
-

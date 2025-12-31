@@ -56,4 +56,3 @@ impl StateStore for LocalStateAccess {
         }
     }
 }
-

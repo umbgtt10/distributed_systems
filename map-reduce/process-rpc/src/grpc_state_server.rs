@@ -104,4 +104,3 @@ pub async fn start_state_server<S: StateStore + Send + Sync + 'static>(
         _shutdown_tx: shutdown_tx,
     })
 }
-

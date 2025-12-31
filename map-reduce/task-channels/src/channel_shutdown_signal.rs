@@ -22,4 +22,3 @@ impl ShutdownSignal for ChannelShutdownSignal {
         self.token.is_cancelled()
     }
 }
-

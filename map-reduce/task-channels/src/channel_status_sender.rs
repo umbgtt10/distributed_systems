@@ -21,4 +21,3 @@ impl StatusSender for ChannelStatusSender {
         self.tx.send(result).await.is_ok()
     }
 }
-

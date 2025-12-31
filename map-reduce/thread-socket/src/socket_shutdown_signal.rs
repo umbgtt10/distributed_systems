@@ -31,4 +31,3 @@ impl ShutdownSignal for SocketShutdownSignal {
         self.flag.load(Ordering::SeqCst)
     }
 }
-

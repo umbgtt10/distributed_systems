@@ -44,4 +44,3 @@ pub trait MapReduceJob: Send + 'static {
     where
         S: StateStore;
 }
-

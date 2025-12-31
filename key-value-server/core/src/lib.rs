@@ -14,6 +14,12 @@ pub use key_value_server::KeyValueServer;
 mod packet_loss_wrapper;
 pub use packet_loss_wrapper::PacketLossWrapper;
 
+mod get_operation;
+pub(crate) use get_operation::GetOperation;
+
+mod put_operation;
+pub(crate) use put_operation::PutOperation;
+
 mod grpc_client;
 pub use grpc_client::GrpcClient;
 
@@ -28,4 +34,3 @@ pub mod rpc {
         include!("../.generated/kvservice.rs");
     }
 }
-

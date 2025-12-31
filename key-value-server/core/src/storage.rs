@@ -32,4 +32,3 @@ pub trait Storage: Send + Sync {
     /// Print all keys with their values and versions (for debugging/shutdown)
     async fn print_all(&self);
 }
-

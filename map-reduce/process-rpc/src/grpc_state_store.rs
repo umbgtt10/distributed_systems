@@ -82,4 +82,3 @@ impl StateStore for GrpcStateStore {
         Vec::new()
     }
 }
-

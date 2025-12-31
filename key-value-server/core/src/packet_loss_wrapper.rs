@@ -46,4 +46,3 @@ impl<S: Storage + 'static> KvService for PacketLossWrapper<S> {
         Ok(response)
     }
 }
-

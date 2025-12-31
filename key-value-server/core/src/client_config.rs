@@ -35,4 +35,3 @@ impl TestConfig {
         Ok(config)
     }
 }
-

@@ -79,4 +79,3 @@ impl<S: Storage + 'static> KvService for KeyValueServer<S> {
         }
     }
 }
-

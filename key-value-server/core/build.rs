@@ -11,4 +11,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .compile_protos(&["proto/key-value-server.proto"], &["proto"])?;
     Ok(())
 }
-

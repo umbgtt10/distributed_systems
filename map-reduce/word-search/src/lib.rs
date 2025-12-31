@@ -126,4 +126,3 @@ fn map_logic(data: &[String], targets: &[String]) -> HashMap<String, i32> {
 
     results
 }
-

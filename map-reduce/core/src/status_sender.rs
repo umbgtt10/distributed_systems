@@ -15,4 +15,3 @@ pub trait StatusSender: Send + Clone + Sync {
     /// Returns true if the signal was sent successfully, false otherwise
     async fn send(&self, result: Result<usize, ()>) -> bool;
 }
-

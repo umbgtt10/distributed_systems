@@ -11,4 +11,3 @@ pub trait WorkSender<A, C>: Clone + Send + 'static {
     /// Send work assignment with completion sender
     fn send_work(&self, assignment: A, completion: C);
 }
-

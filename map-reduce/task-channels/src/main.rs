@@ -201,4 +201,3 @@ async fn main() {
     println!("\n=== PROGRAM COMPLETE ===");
     println!("Total time: {:.2}s", elapsed.as_secs_f64());
 }
-

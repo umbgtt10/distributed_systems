@@ -31,4 +31,3 @@ impl std::fmt::Display for StorageError {
 }
 
 impl std::error::Error for StorageError {}
-

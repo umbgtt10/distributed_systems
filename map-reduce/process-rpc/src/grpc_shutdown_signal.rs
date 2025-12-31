@@ -13,4 +13,3 @@ impl ShutdownSignal for DummyShutdownSignal {
         false
     }
 }
-

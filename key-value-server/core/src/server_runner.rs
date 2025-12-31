@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
+use crate::grpc_client::{FastrandRandom, TokioTimer};
 use crate::rpc::proto::kv_service_server::KvServiceServer;
 use crate::{GrpcClient, KeyValueServer, PacketLossWrapper, Storage, TestConfig};
 use std::net::SocketAddr;
@@ -65,6 +66,8 @@ impl<S: Storage + Clone + 'static> ServerRunner<S> {
                 client_config,
                 format!("http://{}", self.addr),
                 self.config.max_retries_server_packet_loss,
+                TokioTimer,
+                FastrandRandom,
             );
             let cancellation = client.cancellation_token();
             client_cancellations.push(cancellation);
@@ -134,4 +137,3 @@ impl<S: Storage + Clone + 'static> ServerRunner<S> {
         Ok(())
     }
 }
-

@@ -143,4 +143,3 @@ impl WorkerSynchronization for GrpcWorkerSynchronization {
         self.get_status_sender(worker_id)
     }
 }
-

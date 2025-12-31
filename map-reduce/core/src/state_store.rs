@@ -24,4 +24,3 @@ pub trait StateStore: Clone + Send + Sync + 'static {
     /// Get all values for a key
     async fn get(&self, key: &str) -> Vec<i32>;
 }
-
