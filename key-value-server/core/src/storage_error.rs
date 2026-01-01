@@ -12,6 +12,9 @@ pub enum StorageError {
 
     /// Version mismatch (Put with wrong expected version)
     VersionMismatch { expected: u64, actual: u64 },
+
+    /// Generic error
+    StorageError(String),
 }
 
 impl std::fmt::Display for StorageError {
@@ -26,6 +29,7 @@ impl std::fmt::Display for StorageError {
                     expected, actual
                 )
             }
+            StorageError::StorageError(msg) => write!(f, "Storage error: {}", msg),
         }
     }
 }

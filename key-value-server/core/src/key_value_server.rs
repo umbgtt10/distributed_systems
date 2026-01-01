@@ -76,6 +76,13 @@ impl<S: Storage + 'static> KvService for KeyValueServer<S> {
                     actual_version: None,
                 })),
             })),
+            Err(e) => Ok(Response::new(PutResponse {
+                result: Some(put_response::Result::Error(PutError {
+                    error_type: ErrorType::KeyNotFound as i32,
+                    message: e.to_string(),
+                    actual_version: None,
+                })),
+            })),
         }
     }
 }
