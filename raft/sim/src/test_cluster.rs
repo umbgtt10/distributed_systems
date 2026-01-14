@@ -51,7 +51,10 @@ impl TestCluster {
         self.nodes.keys().cloned().collect()
     }
 
-    pub fn get_messages(&self, recipient: NodeId) -> Vec<RaftMsg<String, InMemoryLogEntryCollection>> {
+    pub fn get_messages(
+        &self,
+        recipient: NodeId,
+    ) -> Vec<RaftMsg<String, InMemoryLogEntryCollection>> {
         self.message_log
             .iter()
             .filter(|(_, to, _)| *to == recipient)
@@ -59,7 +62,11 @@ impl TestCluster {
             .collect()
     }
 
-    pub fn get_messages_from(&self, sender: NodeId, recipient: NodeId) -> Vec<RaftMsg<String, InMemoryLogEntryCollection>> {
+    pub fn get_messages_from(
+        &self,
+        sender: NodeId,
+        recipient: NodeId,
+    ) -> Vec<RaftMsg<String, InMemoryLogEntryCollection>> {
         self.message_log
             .iter()
             .filter(|(from, to, _)| *from == sender && *to == recipient)
@@ -67,7 +74,9 @@ impl TestCluster {
             .collect()
     }
 
-    pub fn get_all_messages(&self) -> &[(NodeId, NodeId, RaftMsg<String, InMemoryLogEntryCollection>)] {
+    pub fn get_all_messages(
+        &self,
+    ) -> &[(NodeId, NodeId, RaftMsg<String, InMemoryLogEntryCollection>)] {
         &self.message_log
     }
 
@@ -138,6 +147,21 @@ impl TestCluster {
             }
 
             rounds += 1;
+        }
+    }
+
+    pub fn deliver_message_from_to(&mut self, from: NodeId, to: NodeId) {
+        let mut broker = self.broker.lock().unwrap();
+
+        // Find and remove the specific message
+        if let Some((sender, msg)) = broker.dequeue_from(to, from) {
+            drop(broker); // Release lock before calling on_event
+
+            // Record and deliver
+            self.message_log.push((sender, to, msg.clone()));
+
+            let node = self.nodes.get_mut(&to).unwrap();
+            node.on_event(Event::Message { from: sender, msg });
         }
     }
 }

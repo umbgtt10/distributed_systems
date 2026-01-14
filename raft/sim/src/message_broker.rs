@@ -34,6 +34,19 @@ impl<P, L: LogEntryCollection<Payload = P>> MessageBroker<P, L> {
             None
         }
     }
+
+    pub fn dequeue_from(
+        &mut self,
+        node_id: NodeId,
+        from: NodeId,
+    ) -> Option<(NodeId, RaftMsg<P, L>)> {
+        self.queues.get_mut(&node_id).and_then(|queue| {
+            queue
+                .iter()
+                .position(|(sender, _)| *sender == from)
+                .and_then(|pos| queue.remove(pos))
+        })
+    }
 }
 
 impl<P, L: LogEntryCollection<Payload = P>> Default for MessageBroker<P, L> {
