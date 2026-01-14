@@ -1,4 +1,9 @@
+// Copyright 2025 Umberto Gotti <umberto.gotti@umbertogotti.dev>
+// Licensed under the Apache License, Version 2.0
+// http://www.apache.org/licenses/LICENSE-2.0
+
 use crate::{
+    in_memory_log_entry_collection::InMemoryLogEntryCollection,
     in_memory_state_machine::InMemoryStateMachine, in_memory_storage::InMemoryStorage,
     in_memory_transport::InMemoryTransport, message_broker::MessageBroker,
     vec_node_collection::VecNodeCollection,
@@ -10,13 +15,19 @@ use raft_core::{
 };
 use std::sync::{Arc, Mutex};
 
-type InMemoryRaftNode =
-    RaftNode<InMemoryTransport, InMemoryStorage, String, InMemoryStateMachine, VecNodeCollection>;
+type InMemoryRaftNode = RaftNode<
+    InMemoryTransport,
+    InMemoryStorage,
+    String,
+    InMemoryStateMachine,
+    VecNodeCollection,
+    InMemoryLogEntryCollection,
+>;
 
 pub struct TestCluster {
     nodes: IndexMap<NodeId, InMemoryRaftNode>,
-    broker: Arc<Mutex<MessageBroker<String>>>,
-    message_log: Vec<(NodeId, NodeId, RaftMsg<String>)>,
+    broker: Arc<Mutex<MessageBroker<String, InMemoryLogEntryCollection>>>,
+    message_log: Vec<(NodeId, NodeId, RaftMsg<String, InMemoryLogEntryCollection>)>,
 }
 
 impl TestCluster {
@@ -40,7 +51,7 @@ impl TestCluster {
         self.nodes.keys().cloned().collect()
     }
 
-    pub fn get_messages(&self, recipient: NodeId) -> Vec<RaftMsg<String>> {
+    pub fn get_messages(&self, recipient: NodeId) -> Vec<RaftMsg<String, InMemoryLogEntryCollection>> {
         self.message_log
             .iter()
             .filter(|(_, to, _)| *to == recipient)
@@ -48,7 +59,7 @@ impl TestCluster {
             .collect()
     }
 
-    pub fn get_messages_from(&self, sender: NodeId, recipient: NodeId) -> Vec<RaftMsg<String>> {
+    pub fn get_messages_from(&self, sender: NodeId, recipient: NodeId) -> Vec<RaftMsg<String, InMemoryLogEntryCollection>> {
         self.message_log
             .iter()
             .filter(|(from, to, _)| *from == sender && *to == recipient)
@@ -56,7 +67,7 @@ impl TestCluster {
             .collect()
     }
 
-    pub fn get_all_messages(&self) -> &[(NodeId, NodeId, RaftMsg<String>)] {
+    pub fn get_all_messages(&self) -> &[(NodeId, NodeId, RaftMsg<String, InMemoryLogEntryCollection>)] {
         &self.message_log
     }
 

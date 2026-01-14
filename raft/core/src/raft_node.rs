@@ -3,23 +3,16 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    event::Event,
-    node_collection::NodeCollection,
-    node_state::NodeState,
-    raft_messages::RaftMsg,
-    state_machine::StateMachine,
-    storage::Storage,
-    timer::TimerKind,
-    transport::Transport,
-    types::{LogIndex, NodeId, Term},
+    event::Event, log_entry_collection::LogEntryCollection, node_collection::NodeCollection, node_state::NodeState, raft_messages::RaftMsg, state_machine::StateMachine, storage::Storage, timer::TimerKind, transport::Transport, types::{LogIndex, NodeId, Term}
 };
 
-pub struct RaftNode<T, S, P, SM, C>
+pub struct RaftNode<T, S, P, SM, C, L>
 where
-    T: Transport<Payload = P>,
+    T: Transport<Payload = P, LogEntries = L>,
     S: Storage<Payload = P>,
     SM: StateMachine<Payload = P>,
     C: NodeCollection,
+    L: LogEntryCollection<Payload = P>,
 {
     id: NodeId,
     peers: Option<C>,
@@ -32,12 +25,13 @@ where
     state_machine: SM,
 }
 
-impl<T, S, P, SM, C> RaftNode<T, S, P, SM, C>
+impl<T, S, P, SM, C, L> RaftNode<T, S, P, SM, C, L>
 where
-    T: Transport<Payload = P>,
+    T: Transport<Payload = P, LogEntries = L>,
     S: Storage<Payload = P>,
     SM: StateMachine<Payload = P>,
     C: NodeCollection,
+    L: LogEntryCollection<Payload = P>,
 {
     pub fn new(id: NodeId, storage: S, state_machine: SM) -> Self {
         RaftNode {
@@ -77,7 +71,7 @@ where
         self.transport = Some(transport);
     }
 
-    pub fn on_event(&mut self, event: Event<P>) {
+    pub fn on_event(&mut self, event: Event<P, L>) {
         match event {
             Event::TimerFired(TimerKind::Election) => {
                 if self.role != NodeState::Leader {
@@ -118,7 +112,7 @@ where
                                 leader_id: self.id,
                                 prev_log_index: last_log_index,
                                 prev_log_term: last_log_term,
-                                entries: heapless::Vec::new(), // empty for heartbeat
+                                entries: L::new(), // empty for heartbeat
                                 leader_commit: self.commit_index,
                             },
                         );

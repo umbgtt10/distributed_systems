@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::{raft_messages::RaftMsg, timer::TimerKind, types::NodeId};
+use crate::{log_entry_collection::LogEntryCollection, raft_messages::RaftMsg, timer::TimerKind, types::NodeId};
 
-pub enum Event<P> {
-    Message { from: NodeId, msg: RaftMsg<P> },
+pub enum Event<P, L: LogEntryCollection<Payload = P>> {
+    Message { from: NodeId, msg: RaftMsg<P, L> },
     TimerFired(TimerKind),
     ClientCommand(P),
 }

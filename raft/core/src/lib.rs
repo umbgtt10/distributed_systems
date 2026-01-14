@@ -2,8 +2,11 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
+#![no_std]
+
 pub mod event;
 pub mod log_entry;
+pub mod log_entry_collection;
 pub mod node_collection;
 pub mod node_state;
 pub mod raft_messages;

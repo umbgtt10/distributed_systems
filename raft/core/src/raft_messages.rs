@@ -3,12 +3,12 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    log_entry::LogEntry,
-    types::{LogIndex, NodeId, Term, MAX_ENTRIES},
+    log_entry_collection::LogEntryCollection,
+    types::{LogIndex, NodeId, Term},
 };
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum RaftMsg<P> {
+pub enum RaftMsg<P, L: LogEntryCollection<Payload = P>> {
     RequestVote {
         term: Term,
         candidate_id: NodeId,
@@ -24,7 +24,7 @@ pub enum RaftMsg<P> {
         leader_id: NodeId,
         prev_log_index: LogIndex,
         prev_log_term: Term,
-        entries: heapless::Vec<LogEntry<P>, MAX_ENTRIES>,
+        entries: L,
         leader_commit: LogIndex,
     },
     AppendEntriesResponse {

@@ -5,6 +5,3 @@
 pub type NodeId = u64;
 pub type Term = u64;
 pub type LogIndex = u64;
-
-pub const MAX_ENTRIES: usize = 64;
-pub const MAX_PEERS: usize = 7;

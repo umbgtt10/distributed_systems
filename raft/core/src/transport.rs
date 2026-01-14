@@ -2,14 +2,15 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::{raft_messages::RaftMsg, types::NodeId};
+use crate::{log_entry_collection::LogEntryCollection, raft_messages::RaftMsg, types::NodeId};
 
 pub trait Transport {
     type Payload;
+    type LogEntries: LogEntryCollection<Payload = Self::Payload>;
 
     fn send(
         &mut self,
         target: NodeId,
-        msg: RaftMsg<Self::Payload>,
+        msg: RaftMsg<Self::Payload, Self::LogEntries>,
     );
 }
