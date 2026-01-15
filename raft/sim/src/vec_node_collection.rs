@@ -2,7 +2,10 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-use raft_core::{node_collection::{CollectionError, NodeCollection}, types::NodeId};
+use raft_core::{
+    node_collection::{CollectionError, NodeCollection},
+    types::NodeId,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VecNodeCollection {

@@ -1,7 +1,9 @@
-use raft_core::{
-    event::Event, node_state::NodeState, storage::Storage, timer::TimerKind
-};
-use raft_sim::test_cluster::TestCluster;
+// Copyright 2025 Umberto Gotti <umberto.gotti@umbertogotti.dev>
+// Licensed under the Apache License, Version 2.0
+// http://www.apache.org/licenses/LICENSE-2.0
+
+use raft_core::{event::Event, node_state::NodeState, storage::Storage, timer::TimerKind};
+use raft_sim::{in_memory_storage::InMemoryStorage, test_cluster::TestCluster};
 
 #[test]
 fn test_election_log_restriction() {
@@ -40,8 +42,19 @@ fn test_election_log_restriction() {
     assert_eq!(cluster.get_node(2).storage().last_log_index(), 3);
     assert_eq!(cluster.get_node(3).storage().last_log_index(), 3);
 
-    // Simulate node 3 missing the last entry (network delay)
-    cluster.get_node_mut(3).storage_mut().truncate_after(2);
+    // Simulate node 3 missing the last entry
+    let mut storage_node3 = InMemoryStorage::new();
+    for i in 1..=2 {
+        if let Some(entry) = cluster.get_node(3).storage().get_entry(i) {
+            storage_node3.append_entries(&[entry]);
+        }
+    }
+
+    // Replace node 3 with truncated log
+    cluster.remove_node(3);
+    cluster.add_node_with_storage(3, storage_node3);
+    cluster.connect_peers();
+
     assert_eq!(cluster.get_node(3).storage().last_log_index(), 2);
 
     // Act - Node 3 (with shorter log) attempts election

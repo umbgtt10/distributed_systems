@@ -98,6 +98,17 @@ impl TestCluster {
         self.nodes.insert(id, node);
     }
 
+    pub fn add_node_with_storage(&mut self, id: NodeId, storage: InMemoryStorage) {
+        let transport = InMemoryTransport::new(id, self.broker.clone());
+        let mut node = RaftNode::new(id, storage, InMemoryStateMachine::new());
+        node.set_transport(transport);
+        self.nodes.insert(id, node);
+    }
+
+    pub fn remove_node(&mut self, id: NodeId) {
+        self.nodes.shift_remove(&id);
+    }
+
     pub fn connect_peers(&mut self) {
         let peer_ids: Vec<NodeId> = self.nodes.keys().cloned().collect();
         for node in self.nodes.values_mut() {

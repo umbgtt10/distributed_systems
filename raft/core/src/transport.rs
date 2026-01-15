@@ -8,9 +8,5 @@ pub trait Transport {
     type Payload;
     type LogEntries: LogEntryCollection<Payload = Self::Payload>;
 
-    fn send(
-        &mut self,
-        target: NodeId,
-        msg: RaftMsg<Self::Payload, Self::LogEntries>,
-    );
+    fn send(&mut self, target: NodeId, msg: RaftMsg<Self::Payload, Self::LogEntries>);
 }

@@ -3,16 +3,16 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use raft_core::{
-    event::Event, log_entry::LogEntry, node_state::NodeState, state_machine::StateMachine, storage::Storage, timer::TimerKind
+    event::Event, log_entry::LogEntry, node_state::NodeState, state_machine::StateMachine,
+    storage::Storage, timer::TimerKind,
 };
-use raft_sim::test_cluster::TestCluster;
+use raft_sim::{in_memory_storage::InMemoryStorage, test_cluster::TestCluster};
 
 #[test]
 fn test_log_conflict_resolution() {
     // Arrange - Create cluster with divergent logs
     let mut cluster = TestCluster::new();
     cluster.add_node(1);
-    cluster.add_node(2);
     cluster.add_node(3);
     cluster.connect_peers();
 
@@ -30,21 +30,23 @@ fn test_log_conflict_resolution() {
 
     // All nodes have entry 1: "SET x=1"
     assert_eq!(cluster.get_node(1).storage().last_log_index(), 1);
-    assert_eq!(cluster.get_node(2).storage().last_log_index(), 1);
     assert_eq!(cluster.get_node(3).storage().last_log_index(), 1);
 
-    // Simulate network partition: node 2 isolated, node 1 fails
-    // Node 3 becomes leader in term 2 and writes a conflicting entry
-
-    // Manually inject conflicting entry into node 2 (simulating old leader write)
-    let conflicting_entry = LogEntry {
+    // Create node 2 with a CONFLICTING log entry at index 2
+    let mut storage_node2 = InMemoryStorage::new();
+    // Add entry 1 (matches cluster)
+    storage_node2.append_entries(&[LogEntry {
         term: 1,
-        payload: "SET x=99".to_string(), // Conflicting value
-    };
-    cluster
-        .get_node_mut(2)
-        .storage_mut()
-        .append_entries(&[conflicting_entry]);
+        payload: "SET x=1".to_string(),
+    }]);
+    // Add CONFLICTING entry 2
+    storage_node2.append_entries(&[LogEntry {
+        term: 1,
+        payload: "SET x=99".to_string(), // Conflict!
+    }]);
+
+    cluster.add_node_with_storage(2, storage_node2);
+    cluster.connect_peers();
 
     assert_eq!(cluster.get_node(2).storage().last_log_index(), 2);
 

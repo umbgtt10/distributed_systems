@@ -17,7 +17,9 @@ impl LogEntryCollection for InMemoryLogEntryCollection {
     type Iter<'a> = std::slice::Iter<'a, LogEntry<String>>;
 
     fn new(entries: &[LogEntry<String>]) -> Self {
-        Self { entries: entries.to_vec() }
+        Self {
+            entries: entries.to_vec(),
+        }
     }
 
     fn clear(&mut self) {

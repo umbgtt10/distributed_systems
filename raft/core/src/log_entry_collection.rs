@@ -1,4 +1,4 @@
-use crate::{log_entry::LogEntry};
+use crate::log_entry::LogEntry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CollectionError {

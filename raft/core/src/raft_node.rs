@@ -74,10 +74,6 @@ where
         &self.storage
     }
 
-    pub fn storage_mut(&mut self) -> &mut S {
-        &mut self.storage
-    }
-
     pub fn current_term(&self) -> Term {
         self.current_term
     }
