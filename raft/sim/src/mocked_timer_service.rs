@@ -54,7 +54,7 @@ impl MockTimerService {
         clock: MockClock,
         node_id: u64,
     ) -> Self {
-        let mut service = Self {
+        Self {
             election_deadline: None,
             heartbeat_deadline: None,
             election_timeout_min,
@@ -62,9 +62,7 @@ impl MockTimerService {
             heartbeat_interval,
             clock,
             node_id,
-        };
-        service.reset_election_timer();
-        service
+        }
     }
 
     /// Get deterministic "random" timeout

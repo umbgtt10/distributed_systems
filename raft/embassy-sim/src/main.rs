@@ -15,7 +15,10 @@ use panic_semihosting as _;
 mod logging;
 mod cancellation_token;
 mod embassy_log_collection;
+mod embassy_map_collection;
 mod embassy_node;
+mod embassy_node_collection;
+mod embassy_state_machine;
 mod embassy_storage;
 mod embassy_timer;
 mod heap;
@@ -47,14 +50,12 @@ async fn main(spawner: Spawner) {
     for node_id in 1..=5 {
         let transport = transport_hub.create_transport(node_id);
         spawner
-            .spawn(raft_node_task(node_id as u8, transport, cancel.clone()))
+            .spawn(raft_node_task(node_id, transport, cancel.clone()))
             .unwrap();
-        info!("✅ Spawned node {}", node_id);
+        info!("Spawned node {}", node_id);
     }
 
     info!("All nodes started. Observing consensus...");
-
-    spawner.spawn(heartbeat_task(cancel.clone())).unwrap();
 
     // Run for 30 seconds
     embassy_time::Timer::after(Duration::from_secs(30)).await;
@@ -67,18 +68,4 @@ async fn main(spawner: Spawner) {
 
     info!("Shutdown complete. Exiting.");
     cortex_m_semihosting::debug::exit(cortex_m_semihosting::debug::EXIT_SUCCESS);
-}
-
-#[embassy_executor::task]
-async fn heartbeat_task(cancel: CancellationToken) {
-    loop {
-        embassy_time::Timer::after(Duration::from_secs(10)).await;
-
-        if cancel.is_cancelled() {
-            info!("💓 Heartbeat task shutting down");
-            break;
-        }
-
-        info!("💓 Cluster heartbeat");
-    }
 }

@@ -2,8 +2,12 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
+pub mod embassy_transport;
+
 #[cfg(feature = "channel-transport")]
 pub mod channel;
+
+pub use embassy_transport::EmbassyTransport;
 
 #[cfg(feature = "channel-transport")]
 pub use channel::{ChannelTransport, ChannelTransportHub};

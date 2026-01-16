@@ -21,11 +21,6 @@ impl CancellationToken {
         self.signal.signal(());
     }
 
-    /// Wait until cancellation is requested
-    pub async fn cancelled(&self) {
-        self.signal.wait().await;
-    }
-
     /// Check if cancellation has been requested (non-blocking)
     pub fn is_cancelled(&self) -> bool {
         self.signal.signaled()

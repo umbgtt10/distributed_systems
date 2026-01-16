@@ -2,46 +2,59 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-use embassy_time::{Duration, Instant, Timer};
+use embassy_time::{Duration, Instant};
+use raft_core::timer_service::{ExpiredTimers, TimerKind, TimerService};
+
+const ELECTION_TIMEOUT_MS: u64 = 300;
+const HEARTBEAT_TIMEOUT_MS: u64 = 100;
 
 /// Embassy-based timer implementation for Raft
 pub struct EmbassyTimer {
-    deadline: Option<Instant>,
+    election_deadline: Option<Instant>,
+    heartbeat_deadline: Option<Instant>,
 }
 
 impl EmbassyTimer {
     pub fn new() -> Self {
-        Self { deadline: None }
-    }
-
-    /// Start a timeout
-    pub fn start(&mut self, duration_ms: u64) {
-        let duration = Duration::from_millis(duration_ms);
-        self.deadline = Some(Instant::now() + duration);
-    }
-
-    /// Cancel the timeout
-    pub fn cancel(&mut self) {
-        self.deadline = None;
-    }
-
-    /// Check if timer has expired
-    pub fn has_elapsed(&self) -> bool {
-        if let Some(deadline) = self.deadline {
-            Instant::now() >= deadline
-        } else {
-            false
+        Self {
+            election_deadline: None,
+            heartbeat_deadline: None,
         }
     }
+}
 
-    /// Wait until the timer expires
-    pub async fn wait(&self) {
-        if let Some(deadline) = self.deadline {
-            Timer::at(deadline).await;
-        } else {
-            // No deadline set, wait indefinitely (shouldn't happen in practice)
-            core::future::pending::<()>().await;
+impl TimerService for EmbassyTimer {
+    fn reset_election_timer(&mut self) {
+        self.election_deadline = Some(Instant::now() + Duration::from_millis(ELECTION_TIMEOUT_MS));
+    }
+
+    fn reset_heartbeat_timer(&mut self) {
+        self.heartbeat_deadline =
+            Some(Instant::now() + Duration::from_millis(HEARTBEAT_TIMEOUT_MS));
+    }
+
+    fn stop_timers(&mut self) {
+        self.election_deadline = None;
+        self.heartbeat_deadline = None;
+    }
+
+    fn check_expired(&self) -> ExpiredTimers {
+        let mut expired = ExpiredTimers::new();
+        let now = Instant::now();
+
+        if let Some(deadline) = self.election_deadline {
+            if now >= deadline {
+                expired.push(TimerKind::Election);
+            }
         }
+
+        if let Some(deadline) = self.heartbeat_deadline {
+            if now >= deadline {
+                expired.push(TimerKind::Heartbeat);
+            }
+        }
+
+        expired
     }
 }
 
@@ -50,10 +63,3 @@ impl Default for EmbassyTimer {
         Self::new()
     }
 }
-
-// TODO: Implement timer_traits::Timer trait when integrating with core
-// impl timer_traits::Timer for EmbassyTimer {
-//     fn start(&mut self, duration_ms: u64) { ... }
-//     fn cancel(&mut self) { ... }
-//     fn has_elapsed(&self) -> bool { ... }
-// }

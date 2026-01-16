@@ -1447,6 +1447,7 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "cortex-m-semihosting",
+ "critical-section",
  "defmt",
  "embassy-executor",
  "embassy-sync",

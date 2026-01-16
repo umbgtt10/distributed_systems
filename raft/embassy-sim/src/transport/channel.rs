@@ -111,5 +111,3 @@ impl ChannelTransport {
         }
     }
 }
-
-// TODO: Implement raft_core::transport::Transport trait when integrating

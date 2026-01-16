@@ -82,11 +82,10 @@ fn test_liveness_split_vote_then_recovery() {
     // Try multiple rounds if needed
     let mut elected = false;
 
-    for round in 1..=5 {
-        println!("\n=== Round {} ===", round);
+    for _ in 1..=5 {
 
         // Advance time in SMALLER steps so we catch the first timeout
-        for step in 0..15 {
+        for _ in 0..15 {
             // 15 steps of 30ms = 450ms total
             cluster.advance_time(30);
             cluster.deliver_messages();
@@ -96,12 +95,6 @@ fn test_liveness_split_vote_then_recovery() {
                 .collect();
 
             if leaders.len() == 1 {
-                println!(
-                    "✅ Leader elected at {}ms in round {}: Node {}",
-                    (step + 1) * 30,
-                    round,
-                    leaders[0]
-                );
                 elected = true;
                 break;
             }
@@ -109,16 +102,6 @@ fn test_liveness_split_vote_then_recovery() {
 
         if elected {
             break;
-        }
-
-        println!("After round {}:", round);
-        for id in 1..=3 {
-            println!(
-                "  Node {}: role={:?}, term={}",
-                id,
-                cluster.get_node(id).role(),
-                cluster.get_node(id).current_term()
-            );
         }
 
         let leaders: Vec<_> = (1..=3)
@@ -133,4 +116,27 @@ fn test_liveness_split_vote_then_recovery() {
     }
 
     assert!(elected, "Failed to elect leader after 5 rounds");
+}
+
+#[test]
+fn test_safety_election_timer_starts_without_messages() {
+    let mut cluster = TimefullTestCluster::new();
+
+    // Single isolated node - no peers, no messages
+    cluster.add_node_with_timeout(1, 150, 200);
+    // Don't connect peers - node is isolated
+
+    // Verify starts as Follower
+    assert_eq!(*cluster.get_node(1).role(), NodeState::Follower);
+
+    // Advance time past election timeout
+    cluster.advance_time(250);
+
+    // Even without any messages, the node should start an election
+    // (it will become Candidate and vote for itself)
+    assert_eq!(
+        *cluster.get_node(1).role(),
+        NodeState::Candidate,
+        "Isolated node should start election after timeout"
+    );
 }

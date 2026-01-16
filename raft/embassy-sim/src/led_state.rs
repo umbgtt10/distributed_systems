@@ -21,26 +21,27 @@ impl LedState {
         }
     }
 
-    pub fn update(&mut self, new_state: NodeState) {
-        if self.current_state != new_state {
-            self.current_state = new_state;
+    pub fn update(&mut self, new_state: &NodeState) {
+        if &self.current_state != new_state {
+            self.current_state = match new_state {
+                NodeState::Follower => NodeState::Follower,
+                NodeState::Candidate => NodeState::Candidate,
+                NodeState::Leader => NodeState::Leader,
+            };
             self.display();
         }
     }
 
     fn display(&self) {
-        let (color, emoji) = match self.current_state {
-            NodeState::Leader => ("Green", "🟢"),
-            NodeState::Candidate => ("Yellow", "🟡"),
-            NodeState::Follower => ("Red", "🔴"),
+        let color = match self.current_state {
+            NodeState::Leader => "Green",
+            NodeState::Candidate => "Yellow",
+            NodeState::Follower => "Red",
         };
 
-        crate::info!(
-            "{} Node {} LED: {} ({:?})",
-            emoji,
-            self.node_id,
-            color,
-            self.current_state
+        info!(
+            "Node {} LED: {} ({:?})",
+            self.node_id, color, self.current_state
         );
     }
 }

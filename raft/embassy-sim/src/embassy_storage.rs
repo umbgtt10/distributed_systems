@@ -5,7 +5,11 @@
 use alloc::string::String;
 use heapless::Vec;
 use raft_core::log_entry::LogEntry;
+use raft_core::log_entry_collection::LogEntryCollection;
+use raft_core::storage::Storage;
 use raft_core::types::{LogIndex, NodeId, Term};
+
+use crate::embassy_log_collection::EmbassyLogEntryCollection;
 
 /// Simple in-memory storage for Embassy Raft nodes
 /// In a real system, this would persist to flash
@@ -24,44 +28,62 @@ impl EmbassyStorage {
             log: Vec::new(),
         }
     }
+}
 
-    pub fn current_term(&self) -> Term {
+impl Storage for EmbassyStorage {
+    type Payload = String;
+    type LogEntryCollection = EmbassyLogEntryCollection;
+
+    fn current_term(&self) -> Term {
         self.current_term
     }
 
-    pub fn set_current_term(&mut self, term: Term) {
+    fn set_current_term(&mut self, term: Term) {
         self.current_term = term;
     }
 
-    pub fn voted_for(&self) -> Option<NodeId> {
+    fn voted_for(&self) -> Option<NodeId> {
         self.voted_for
     }
 
-    pub fn set_voted_for(&mut self, voted_for: Option<NodeId>) {
-        self.voted_for = voted_for;
+    fn set_voted_for(&mut self, vote: Option<NodeId>) {
+        self.voted_for = vote;
     }
 
-    pub fn last_log_index(&self) -> LogIndex {
+    fn last_log_index(&self) -> LogIndex {
         self.log.len() as LogIndex
     }
 
-    pub fn last_log_term(&self) -> Term {
+    fn last_log_term(&self) -> Term {
         self.log.last().map(|entry| entry.term).unwrap_or(0)
     }
 
-    pub fn append_entry(&mut self, entry: LogEntry<alloc::string::String>) -> Result<(), ()> {
-        self.log.push(entry).map_err(|_| ())
-    }
-
-    pub fn get_entry(&self, index: LogIndex) -> Option<&LogEntry<alloc::string::String>> {
+    fn get_entry(&self, index: LogIndex) -> Option<LogEntry<Self::Payload>> {
         if index == 0 || index > self.log.len() as LogIndex {
             None
         } else {
-            self.log.get((index - 1) as usize)
+            self.log.get((index - 1) as usize).cloned()
         }
     }
 
-    pub fn truncate_after(&mut self, index: LogIndex) {
+    fn get_entries(&self, start: LogIndex, end: LogIndex) -> Self::LogEntryCollection {
+        if start == 0 || start > end || end > self.log.len() as LogIndex {
+            return EmbassyLogEntryCollection::new(&[]);
+        }
+
+        let start_idx = (start - 1) as usize;
+        let end_idx = end as usize;
+        let slice = &self.log[start_idx..end_idx];
+        EmbassyLogEntryCollection::new(slice)
+    }
+
+    fn append_entries(&mut self, entries: &[LogEntry<Self::Payload>]) {
+        for entry in entries {
+            let _ = self.log.push(entry.clone());
+        }
+    }
+
+    fn truncate_after(&mut self, index: LogIndex) {
         self.log.truncate(index as usize);
     }
 }
@@ -71,5 +93,3 @@ impl Default for EmbassyStorage {
         Self::new()
     }
 }
-
-// TODO: Implement raft_core::storage::Storage trait when integrating

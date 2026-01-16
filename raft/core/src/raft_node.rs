@@ -59,12 +59,16 @@ where
         id: NodeId,
         storage: S,
         state_machine: SM,
-        election: ElectionManager<C, TS>,
+        mut election: ElectionManager<C, TS>,
         replication: LogReplicationManager<M>,
         transport: T,
         peers: C,
     ) -> Self {
         let current_term = storage.current_term();
+
+        // Start election timer for initial Follower state
+        election.timer_service_mut().reset_election_timer();
+
         RaftNode {
             id,
             peers,

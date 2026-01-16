@@ -7,6 +7,7 @@ use embedded_alloc::LlffHeap as Heap;
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
 
+#[allow(static_mut_refs)]
 pub fn init_heap() {
     const HEAP_SIZE: usize = 64 * 1024; // 64 KB heap
     static mut HEAP_MEM: [u8; HEAP_SIZE] = [0; HEAP_SIZE];

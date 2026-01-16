@@ -5,30 +5,59 @@
 use embassy_time::{Duration, Timer};
 
 use crate::cancellation_token::CancellationToken;
+use crate::embassy_map_collection::EmbassyMapCollection;
+use crate::embassy_node_collection::EmbassyNodeCollection;
+use crate::embassy_state_machine::EmbassyStateMachine;
 use crate::embassy_storage::EmbassyStorage;
 use crate::embassy_timer::EmbassyTimer;
 use crate::led_state::LedState;
 use crate::transport::channel::ChannelTransport;
+use crate::transport::embassy_transport::EmbassyTransport;
 
-use raft_core::{node_state::NodeState, raft_node::RaftNode};
+use raft_core::election_manager::ElectionManager;
+use raft_core::event::Event;
+use raft_core::log_replication_manager::LogReplicationManager;
+use raft_core::node_collection::NodeCollection;
+use raft_core::raft_node_builder::RaftNodeBuilder;
+use raft_core::timer_service::TimerService;
+use raft_core::types::NodeId;
 
 #[embassy_executor::task(pool_size = 5)]
-pub async fn raft_node_task(node_id: u8, transport: ChannelTransport, cancel: CancellationToken) {
-    crate::info!("Node {} starting...", node_id);
+pub async fn raft_node_task(
+    node_id: NodeId,
+    mut channel_transport: ChannelTransport,
+    cancel: CancellationToken,
+) {
+    info!("Node {} starting...", node_id);
 
     let storage = EmbassyStorage::new();
     let timer = EmbassyTimer::new();
-    let mut led = LedState::new(node_id);
+    let mut transport = EmbassyTransport::new();
+    let state_machine = EmbassyStateMachine::new();
+    let mut led = LedState::new(node_id as u8);
 
-    // TODO: Build RaftNode using builder pattern
-    // let mut node = RaftNode::builder()
-    //     .with_node_id(node_id)
-    //     .with_storage(storage)
-    //     .with_transport(transport)
-    //     .with_timer(timer)
-    //     .build();
+    // Create peer collection
+    let mut peers = EmbassyNodeCollection::new();
+    for id in 1..=5 {
+        if id != node_id {
+            let _ = peers.push(id);
+        }
+    }
 
-    crate::info!("Node {} initialized", node_id);
+    // Create election manager with timer
+    let election = ElectionManager::new(timer);
+
+    // Create log replication manager
+    let replication = LogReplicationManager::<EmbassyMapCollection>::new();
+
+    // Build RaftNode using builder pattern
+    let mut node = RaftNodeBuilder::new(node_id, storage, state_machine)
+        .with_election(election)
+        .with_replication(replication)
+        .with_transport(transport.clone(), peers);
+
+    info!("Node {} initialized as Follower", node_id);
+    led.update(node.role());
 
     loop {
         // Check for cancellation
@@ -37,20 +66,33 @@ pub async fn raft_node_task(node_id: u8, transport: ChannelTransport, cancel: Ca
             break;
         }
 
-        // TODO: Main node loop
-        // 1. Check timer for election timeout
-        // 2. Process incoming messages
-        // 3. Send heartbeats if leader
-        // 4. Update LED based on role
+        // 1. Check for timer expiration
+        let timer_service = node.timer_service();
+        let expired_timers = timer_service.check_expired();
 
-        // Placeholder: Update LED based on current role
-        // let role = node.role();
-        // led.update(role);
+        for timer_kind in expired_timers.iter() {
+            crate::info!("Node {} timer fired: {:?}", node_id, timer_kind);
+            node.on_event(Event::TimerFired(timer_kind));
+            led.update(node.role());
+        }
 
-        // Simulate some work
-        info!("Node {} doing some work...", node_id);
-        Timer::after(Duration::from_millis(100)).await;
+        // 2. Drain outbox and send messages via channel transport
+        for (target, msg) in transport.drain_outbox() {
+            channel_transport.send(target, msg).await;
+        }
+
+        // 3. Check for incoming messages (non-blocking with timeout)
+        let recv_result =
+            embassy_time::with_timeout(Duration::from_millis(10), channel_transport.recv()).await;
+
+        if let Ok((from, msg)) = recv_result {
+            node.on_event(Event::Message { from, msg });
+            led.update(node.role());
+        }
+
+        // Small yield to allow other tasks to run
+        Timer::after(Duration::from_millis(1)).await;
     }
 
-    crate::info!("Node {} shutdown complete", node_id);
+    info!("Node {} shutdown complete", node_id);
 }
