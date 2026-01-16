@@ -6,7 +6,7 @@ use raft_core::{event::Event, node_state::NodeState, timer_service::TimerKind};
 use raft_sim::timeless_test_cluster::TimelessTestCluster;
 
 #[test]
-fn test_commit_index_advancement() {
+fn test_liveness_commit_index_advancement() {
     // Arrange
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);

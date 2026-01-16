@@ -8,7 +8,7 @@ use raft_core::{
 use raft_sim::timeless_test_cluster::TimelessTestCluster;
 
 #[test]
-fn test_client_command_replication() {
+fn test_liveness_client_command_replication() {
     // Arrange
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);

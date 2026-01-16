@@ -6,7 +6,7 @@ use raft_core::{event::Event, node_state::NodeState, storage::Storage, timer_ser
 use raft_sim::timeless_test_cluster::TimelessTestCluster;
 
 #[test]
-fn test_leader_steps_down_on_higher_term() {
+fn test_safety_leader_steps_down_on_higher_term() {
     // Arrange
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);

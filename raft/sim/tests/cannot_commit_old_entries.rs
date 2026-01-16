@@ -5,7 +5,7 @@ use raft_core::{
 use raft_sim::timeless_test_cluster::TimelessTestCluster;
 
 #[test]
-fn test_cannot_commit_old_term_entry() {
+fn test_safety_cannot_commit_old_term_entry() {
     // Arrange - Node 1 is leader in term 1, replicates entry to node 2 only
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);

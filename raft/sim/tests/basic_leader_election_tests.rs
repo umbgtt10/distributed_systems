@@ -12,7 +12,7 @@ use raft_sim::{
 };
 
 #[test]
-fn test_empty_cluster() {
+fn test_liveness_empty_cluster() {
     // Arrange
     let cluster = TimelessTestCluster::new();
 
@@ -21,7 +21,7 @@ fn test_empty_cluster() {
 }
 
 #[test]
-fn test_add_node() {
+fn test_liveness_add_node() {
     // Arrange
     let mut cluster = TimelessTestCluster::new();
 
@@ -35,7 +35,7 @@ fn test_add_node() {
 }
 
 #[test]
-fn test_connection() {
+fn test_liveness_connection() {
     // Arrange
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);
@@ -71,7 +71,7 @@ fn test_connection() {
 }
 
 #[test]
-fn test_heartbeat_followers_nothing_delivered() {
+fn test_liveness_heartbeat_followers_nothing_delivered() {
     // Arrange
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);
@@ -93,7 +93,7 @@ fn test_heartbeat_followers_nothing_delivered() {
 }
 
 #[test]
-fn test_election_triggered_followers_respond() {
+fn test_liveness_election_triggered_followers_respond() {
     // Arrange
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);

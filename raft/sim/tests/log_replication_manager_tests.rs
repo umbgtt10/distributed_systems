@@ -11,8 +11,8 @@ use raft_core::{
 use raft_sim::{
     in_memory_log_entry_collection::InMemoryLogEntryCollection,
     in_memory_map_collection::InMemoryMapCollection,
-    in_memory_node_collection::InMemoryNodeCollection, in_memory_state_machine::InMemoryStateMachine,
-    in_memory_storage::InMemoryStorage,
+    in_memory_node_collection::InMemoryNodeCollection,
+    in_memory_state_machine::InMemoryStateMachine, in_memory_storage::InMemoryStorage,
 };
 
 // ============================================================
@@ -20,7 +20,7 @@ use raft_sim::{
 // ============================================================
 
 #[test]
-fn test_accept_entries_from_leader() {
+fn test_liveness_accept_entries_from_leader() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
@@ -64,7 +64,7 @@ fn test_accept_entries_from_leader() {
 }
 
 #[test]
-fn test_reject_entries_from_stale_term() {
+fn test_safety_reject_entries_from_stale_term() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(5);
@@ -101,7 +101,7 @@ fn test_reject_entries_from_stale_term() {
 }
 
 #[test]
-fn test_reject_inconsistent_prev_log() {
+fn test_safety_reject_inconsistent_prev_log() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
@@ -136,7 +136,7 @@ fn test_reject_inconsistent_prev_log() {
 }
 
 #[test]
-fn test_reject_mismatched_prev_log_term() {
+fn test_safety_reject_mismatched_prev_log_term() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(3);
@@ -178,7 +178,7 @@ fn test_reject_mismatched_prev_log_term() {
 }
 
 #[test]
-fn test_delete_conflicting_entries() {
+fn test_safety_delete_conflicting_entries() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
@@ -232,7 +232,7 @@ fn test_delete_conflicting_entries() {
 }
 
 #[test]
-fn test_heartbeat_updates_commit_index() {
+fn test_liveness_heartbeat_updates_commit_index() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
@@ -268,11 +268,15 @@ fn test_heartbeat_updates_commit_index() {
         &mut role,
     );
 
-    assert_eq!(replication.commit_index(), 2, "Should update commit index from heartbeat");
+    assert_eq!(
+        replication.commit_index(),
+        2,
+        "Should update commit index from heartbeat"
+    );
 }
 
 #[test]
-fn test_step_down_on_higher_term_append_entries() {
+fn test_safety_step_down_on_higher_term_append_entries() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
@@ -303,18 +307,33 @@ fn test_step_down_on_higher_term_append_entries() {
 // ============================================================
 
 #[test]
-fn test_update_next_index_on_success() {
+fn test_liveness_update_next_index_on_success() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
 
     // Add 5 entries
     storage.append_entries(&[
-        LogEntry { term: 2, payload: "cmd1".to_string() },
-        LogEntry { term: 2, payload: "cmd2".to_string() },
-        LogEntry { term: 2, payload: "cmd3".to_string() },
-        LogEntry { term: 2, payload: "cmd4".to_string() },
-        LogEntry { term: 2, payload: "cmd5".to_string() },
+        LogEntry {
+            term: 2,
+            payload: "cmd1".to_string(),
+        },
+        LogEntry {
+            term: 2,
+            payload: "cmd2".to_string(),
+        },
+        LogEntry {
+            term: 2,
+            payload: "cmd3".to_string(),
+        },
+        LogEntry {
+            term: 2,
+            payload: "cmd4".to_string(),
+        },
+        LogEntry {
+            term: 2,
+            payload: "cmd5".to_string(),
+        },
     ]);
 
     let mut peers = InMemoryNodeCollection::new();
@@ -347,14 +366,15 @@ fn test_update_next_index_on_success() {
 }
 
 #[test]
-fn test_decrement_next_index_on_failure() {
+fn test_liveness_decrement_next_index_on_failure() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
 
-    storage.append_entries(&[
-        LogEntry { term: 2, payload: "cmd".to_string() },
-    ]);
+    storage.append_entries(&[LogEntry {
+        term: 2,
+        payload: "cmd".to_string(),
+    }]);
 
     let mut peers = InMemoryNodeCollection::new();
     peers.push(2).unwrap();
@@ -380,18 +400,33 @@ fn test_decrement_next_index_on_failure() {
 }
 
 #[test]
-fn test_commit_index_advancement_on_majority() {
+fn test_liveness_commit_index_advancement_on_majority() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
 
     // Add 5 entries
     storage.append_entries(&[
-        LogEntry { term: 2, payload: "cmd1".to_string() },
-        LogEntry { term: 2, payload: "cmd2".to_string() },
-        LogEntry { term: 2, payload: "cmd3".to_string() },
-        LogEntry { term: 2, payload: "cmd4".to_string() },
-        LogEntry { term: 2, payload: "cmd5".to_string() },
+        LogEntry {
+            term: 2,
+            payload: "cmd1".to_string(),
+        },
+        LogEntry {
+            term: 2,
+            payload: "cmd2".to_string(),
+        },
+        LogEntry {
+            term: 2,
+            payload: "cmd3".to_string(),
+        },
+        LogEntry {
+            term: 2,
+            payload: "cmd4".to_string(),
+        },
+        LogEntry {
+            term: 2,
+            payload: "cmd5".to_string(),
+        },
     ]);
 
     let mut peers = InMemoryNodeCollection::new();
@@ -413,7 +448,11 @@ fn test_commit_index_advancement_on_majority() {
 
     // Now 3 out of 5 nodes (including leader) have entries up to index 3
     // Should advance commit_index to 3
-    assert_eq!(replication.commit_index(), 3, "Should advance commit_index on majority");
+    assert_eq!(
+        replication.commit_index(),
+        3,
+        "Should advance commit_index on majority"
+    );
 
     // Node 4 confirms up to index 5
     replication.handle_append_entries_response(4, true, 5, &storage, &mut state_machine);
@@ -421,7 +460,8 @@ fn test_commit_index_advancement_on_majority() {
     // Now 3 out of 5 have up to index 5 (leader, node 4, and we need one more)
     // commit_index should still be 3
     assert_eq!(
-        replication.commit_index(), 3,
+        replication.commit_index(),
+        3,
         "Should not advance without majority at higher index"
     );
 
@@ -430,20 +470,33 @@ fn test_commit_index_advancement_on_majority() {
 
     // Now we have: leader(5), node2(3), node3(3), node4(5), node5(4)
     // Majority (3/5) at index 4: leader, node4, node5
-    assert_eq!(replication.commit_index(), 4, "Should advance to index 4 with majority");
+    assert_eq!(
+        replication.commit_index(),
+        4,
+        "Should advance to index 4 with majority"
+    );
 }
 
 #[test]
-fn test_only_commit_current_term_entries() {
+fn test_safety_only_commit_current_term_entries() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(3);
 
     // Add entries from previous terms and current term
     storage.append_entries(&[
-        LogEntry { term: 1, payload: "old1".to_string() },
-        LogEntry { term: 2, payload: "old2".to_string() },
-        LogEntry { term: 3, payload: "new1".to_string() },
+        LogEntry {
+            term: 1,
+            payload: "old1".to_string(),
+        },
+        LogEntry {
+            term: 2,
+            payload: "old2".to_string(),
+        },
+        LogEntry {
+            term: 3,
+            payload: "new1".to_string(),
+        },
     ]);
 
     let mut peers = InMemoryNodeCollection::new();
@@ -470,14 +523,15 @@ fn test_only_commit_current_term_entries() {
 }
 
 #[test]
-fn test_ignore_responses_from_old_term() {
+fn test_safety_ignore_responses_from_old_term() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(3);
 
-    storage.append_entries(&[
-        LogEntry { term: 3, payload: "cmd".to_string() },
-    ]);
+    storage.append_entries(&[LogEntry {
+        term: 3,
+        payload: "cmd".to_string(),
+    }]);
 
     let mut peers = InMemoryNodeCollection::new();
     peers.push(2).unwrap();
@@ -510,7 +564,7 @@ fn test_ignore_responses_from_old_term() {
 // ============================================================
 
 #[test]
-fn test_initialize_leader_state() {
+fn test_liveness_initialize_leader_state() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(1);
@@ -542,7 +596,7 @@ fn test_initialize_leader_state() {
 }
 
 #[test]
-fn test_append_entries_with_exact_match() {
+fn test_safety_append_entries_with_exact_match() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
@@ -592,7 +646,7 @@ fn test_append_entries_with_exact_match() {
 }
 
 #[test]
-fn test_commit_index_never_decreases() {
+fn test_safety_commit_index_never_decreases() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
@@ -643,18 +697,28 @@ fn test_commit_index_never_decreases() {
     );
 
     // commit_index should not decrease
-    assert_eq!(replication.commit_index(), 2, "commit_index should never decrease");
+    assert_eq!(
+        replication.commit_index(),
+        2,
+        "commit_index should never decrease"
+    );
 }
 
 #[test]
-fn test_three_node_cluster_majority() {
+fn test_liveness_three_node_cluster_majority() {
     let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(1);
 
     storage.append_entries(&[
-        LogEntry { term: 1, payload: "cmd1".to_string() },
-        LogEntry { term: 1, payload: "cmd2".to_string() },
+        LogEntry {
+            term: 1,
+            payload: "cmd1".to_string(),
+        },
+        LogEntry {
+            term: 1,
+            payload: "cmd2".to_string(),
+        },
     ]);
 
     let mut peers = InMemoryNodeCollection::new();
@@ -668,5 +732,9 @@ fn test_three_node_cluster_majority() {
     // Only node 2 confirms (1 follower + 1 leader = 2/3 = majority)
     replication.handle_append_entries_response(2, true, 2, &storage, &mut state_machine);
 
-    assert_eq!(replication.commit_index(), 2, "Should commit with 2/3 majority");
+    assert_eq!(
+        replication.commit_index(),
+        2,
+        "Should commit with 2/3 majority"
+    );
 }

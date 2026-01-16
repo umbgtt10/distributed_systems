@@ -6,7 +6,7 @@ use raft_core::{event::Event, node_state::NodeState, storage::Storage, timer_ser
 use raft_sim::{in_memory_storage::InMemoryStorage, timeless_test_cluster::TimelessTestCluster};
 
 #[test]
-fn test_election_log_restriction() {
+fn test_safety_election_log_restriction() {
     // Arrange - Create cluster with different log lengths
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);

@@ -9,7 +9,7 @@ use raft_core::{
 use raft_sim::{in_memory_storage::InMemoryStorage, timeless_test_cluster::TimelessTestCluster};
 
 #[test]
-fn test_log_conflict_resolution() {
+fn test_safety_log_conflict_resolution() {
     // Arrange - Create cluster with divergent logs
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);

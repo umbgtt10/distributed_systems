@@ -17,7 +17,7 @@ use raft_sim::{
 // ============================================================
 
 #[test]
-fn test_start_election_increments_term() {
+fn test_liveness_start_election_increments_term() {
     let mut election: ElectionManager<InMemoryNodeCollection, DummyTimer> =
         ElectionManager::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
@@ -37,7 +37,7 @@ fn test_start_election_increments_term() {
 }
 
 #[test]
-fn test_start_election_votes_for_self() {
+fn test_safety_start_election_votes_for_self() {
     let mut election: ElectionManager<InMemoryNodeCollection, DummyTimer> =
         ElectionManager::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
@@ -55,7 +55,7 @@ fn test_start_election_votes_for_self() {
 }
 
 #[test]
-fn test_start_election_generates_correct_message() {
+fn test_liveness_start_election_generates_correct_message() {
     let mut election: ElectionManager<InMemoryNodeCollection, DummyTimer> =
         ElectionManager::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
@@ -91,7 +91,7 @@ fn test_start_election_generates_correct_message() {
 // ============================================================
 
 #[test]
-fn test_grant_vote_to_first_candidate() {
+fn test_safety_grant_vote_to_first_candidate() {
     let mut election: ElectionManager<InMemoryNodeCollection, DummyTimer> =
         ElectionManager::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
@@ -121,7 +121,7 @@ fn test_grant_vote_to_first_candidate() {
 }
 
 #[test]
-fn test_reject_when_already_voted() {
+fn test_safety_reject_when_already_voted() {
     let mut election: ElectionManager<InMemoryNodeCollection, DummyTimer> =
         ElectionManager::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
@@ -152,7 +152,7 @@ fn test_reject_when_already_voted() {
 }
 
 #[test]
-fn test_grant_vote_to_same_candidate_twice() {
+fn test_safety_grant_vote_to_same_candidate_twice() {
     let mut election: ElectionManager<InMemoryNodeCollection, DummyTimer> =
         ElectionManager::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
@@ -180,7 +180,7 @@ fn test_grant_vote_to_same_candidate_twice() {
 }
 
 #[test]
-fn test_reject_less_up_to_date_candidate() {
+fn test_safety_reject_less_up_to_date_candidate() {
     let mut election: ElectionManager<InMemoryNodeCollection, DummyTimer> =
         ElectionManager::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
@@ -228,7 +228,7 @@ fn test_reject_less_up_to_date_candidate() {
 }
 
 #[test]
-fn test_grant_to_equally_up_to_date_candidate() {
+fn test_safety_grant_to_equally_up_to_date_candidate() {
     let mut election: ElectionManager<InMemoryNodeCollection, DummyTimer> =
         ElectionManager::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
@@ -270,7 +270,7 @@ fn test_grant_to_equally_up_to_date_candidate() {
 }
 
 #[test]
-fn test_update_term_from_higher_request() {
+fn test_safety_update_term_from_higher_request() {
     let mut election: ElectionManager<InMemoryNodeCollection, DummyTimer> =
         ElectionManager::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
@@ -294,7 +294,7 @@ fn test_update_term_from_higher_request() {
 }
 
 #[test]
-fn test_reject_stale_vote_request() {
+fn test_safety_reject_stale_vote_request() {
     let mut election: ElectionManager<InMemoryNodeCollection, DummyTimer> =
         ElectionManager::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
@@ -326,7 +326,7 @@ fn test_reject_stale_vote_request() {
 // ============================================================
 
 #[test]
-fn test_become_leader_on_majority() {
+fn test_liveness_become_leader_on_majority() {
     let mut election = ElectionManager::<InMemoryNodeCollection, DummyTimer>::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
@@ -368,7 +368,7 @@ fn test_become_leader_on_majority() {
 }
 
 #[test]
-fn test_stay_candidate_without_majority() {
+fn test_liveness_stay_candidate_without_majority() {
     let mut election = ElectionManager::<InMemoryNodeCollection, DummyTimer>::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
@@ -397,7 +397,7 @@ fn test_stay_candidate_without_majority() {
 }
 
 #[test]
-fn test_handle_vote_rejection() {
+fn test_liveness_handle_vote_rejection() {
     let mut election = ElectionManager::<InMemoryNodeCollection, DummyTimer>::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
@@ -429,7 +429,7 @@ fn test_handle_vote_rejection() {
 }
 
 #[test]
-fn test_ignore_stale_vote_response() {
+fn test_safety_ignore_stale_vote_response() {
     let mut election = ElectionManager::<InMemoryNodeCollection, DummyTimer>::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(5);
@@ -460,7 +460,7 @@ fn test_ignore_stale_vote_response() {
 }
 
 #[test]
-fn test_step_down_on_higher_term_in_response() {
+fn test_safety_step_down_on_higher_term_in_response() {
     let mut election = ElectionManager::<InMemoryNodeCollection, DummyTimer>::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(2);
@@ -495,7 +495,7 @@ fn test_step_down_on_higher_term_in_response() {
 // ============================================================
 
 #[test]
-fn test_majority_calculation_even_cluster() {
+fn test_liveness_majority_calculation_even_cluster() {
     let mut election = ElectionManager::<InMemoryNodeCollection, DummyTimer>::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(1);
@@ -530,7 +530,7 @@ fn test_majority_calculation_even_cluster() {
 }
 
 #[test]
-fn test_single_node_cluster() {
+fn test_liveness_single_node_cluster() {
     let mut election = ElectionManager::<InMemoryNodeCollection, DummyTimer>::new(DummyTimer);
     let mut storage = InMemoryStorage::new();
     storage.set_current_term(1);

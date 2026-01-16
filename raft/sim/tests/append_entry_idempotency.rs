@@ -2,7 +2,7 @@ use raft_core::{event::Event, node_state::NodeState, storage::Storage, timer_ser
 use raft_sim::timeless_test_cluster::TimelessTestCluster;
 
 #[test]
-fn test_append_entries_idempotency() {
+fn test_safety_append_entries_idempotency() {
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);
     cluster.add_node(2);

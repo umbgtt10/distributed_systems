@@ -8,7 +8,7 @@ use raft_core::{
 use raft_sim::timeless_test_cluster::TimelessTestCluster;
 
 #[test]
-fn test_leader_sends_heartbeats() {
+fn test_liveness_leader_sends_heartbeats() {
     // Arrange
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);
@@ -59,7 +59,7 @@ fn test_leader_sends_heartbeats() {
 }
 
 #[test]
-fn test_heartbeat_prevents_election() {
+fn test_liveness_heartbeat_prevents_election() {
     // Arrange - Leader established
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);

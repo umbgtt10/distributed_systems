@@ -8,7 +8,7 @@ use raft_core::{
 use raft_sim::timeless_test_cluster::TimelessTestCluster;
 
 #[test]
-fn test_split_vote_no_leader() {
+fn test_liveness_split_vote_no_leader() {
     // Arrange
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);

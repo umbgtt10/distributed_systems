@@ -6,7 +6,7 @@ use raft_core::node_state::NodeState;
 use raft_sim::timefull_test_cluster::TimefullTestCluster;
 
 #[test]
-fn test_real_timer_triggers_election() {
+fn test_liveness_real_timer_triggers_election() {
     let mut cluster = TimefullTestCluster::new();
 
     // Node 1: Quick timeout (will trigger election first)
@@ -31,7 +31,7 @@ fn test_real_timer_triggers_election() {
 }
 
 #[test]
-fn test_leader_sends_heartbeats_automatically() {
+fn test_liveness_leader_sends_heartbeats_automatically() {
     let mut cluster = TimefullTestCluster::new();
 
     // Node 1: Quick timeout
@@ -69,7 +69,7 @@ fn test_leader_sends_heartbeats_automatically() {
 }
 
 #[test]
-fn test_split_vote_then_recovery() {
+fn test_liveness_split_vote_then_recovery() {
     let mut cluster = TimefullTestCluster::new();
 
     // Give nodes DIFFERENT timeouts so randomization spreads them out

@@ -8,7 +8,7 @@ use raft_core::{
 use raft_sim::timeless_test_cluster::TimelessTestCluster;
 
 #[test]
-fn test_vote_rejection_already_voted() {
+fn test_safety_vote_rejection_already_voted() {
     // Arrange
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);

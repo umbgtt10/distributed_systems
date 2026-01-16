@@ -9,7 +9,7 @@ use raft_core::{
 use raft_sim::timeless_test_cluster::TimelessTestCluster;
 
 #[test]
-fn test_network_partition_recovery() {
+fn test_liveness_network_partition_recovery() {
     // Arrange - Create 5-node cluster
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);

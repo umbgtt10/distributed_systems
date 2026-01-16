@@ -5,7 +5,7 @@ use raft_core::{
 use raft_sim::{in_memory_storage::InMemoryStorage, timeless_test_cluster::TimelessTestCluster};
 
 #[test]
-fn test_follower_far_behind() {
+fn test_liveness_follower_far_behind() {
     // Arrange - Leader has entries 1-5, follower has only 1-2
     let mut cluster = TimelessTestCluster::new();
     cluster.add_node(1);
