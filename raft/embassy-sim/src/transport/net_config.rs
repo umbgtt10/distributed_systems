@@ -21,6 +21,12 @@ impl NodeNetworkResources {
     }
 }
 
+impl Default for NodeNetworkResources {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Get network configuration for a node
 pub fn get_node_config(node_id: u8) -> Config {
     Config::ipv4_static(StaticConfigV4 {
@@ -39,9 +45,18 @@ pub static mut NODE_RESOURCES: [MaybeUninit<NodeNetworkResources>; 5] = [
     MaybeUninit::uninit(),
 ];
 
+
+
 /// Get resources for a specific node (must be called once per node)
+///
+/// # Safety
+///
+/// This function accesses a `static mut` which is unsafe.
+/// Caller must ensure that:
+/// 1. `node_id` maps to a valid index within bounds.
+/// 2. This function is called exactly once per node_id to avoid creating multiple mutable references to the same static memory.
 #[allow(static_mut_refs)]
 pub unsafe fn get_node_resources(node_id: u8) -> &'static mut NodeNetworkResources {
     let idx = (node_id - 1) as usize;
-    NODE_RESOURCES[idx].write(NodeNetworkResources::new())
+    NODE_RESOURCES[idx].write(NodeNetworkResources::default())
 }

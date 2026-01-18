@@ -146,7 +146,7 @@ impl TryFrom<WireRaftMsg> for RaftMsg<String, EmbassyLogEntryCollection> {
             } => {
                 let log_entries: Vec<LogEntry<String>> = entries
                     .into_iter()
-                    .map(|wire_entry| LogEntry::from(wire_entry))
+                    .map(LogEntry::from)
                     .collect();
                 let collection = EmbassyLogEntryCollection::new(&log_entries);
                 Ok(RaftMsg::AppendEntries {

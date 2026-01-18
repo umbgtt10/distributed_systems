@@ -89,6 +89,12 @@ impl NetworkBus {
     }
 }
 
+impl Default for NetworkBus {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Mock network driver implementing embassy-net Driver trait
 pub struct MockNetDriver {
     node_id: u8,
@@ -127,7 +133,6 @@ impl Driver for MockNetDriver {
         &mut self,
         cx: &mut core::task::Context,
     ) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
-        crate::info!("Node {} receive polling", self.node_id);
         // Try to get a packet from our queue
         if let Some(packet) = self.try_recv_packet() {
             let rx = MockRxToken {
@@ -148,7 +153,6 @@ impl Driver for MockNetDriver {
 
     fn transmit(&mut self, _cx: &mut core::task::Context) -> Option<Self::TxToken<'_>> {
         // Always ready to transmit
-        crate::info!("Node {} transmit ready check", self.node_id);
         Some(MockTxToken {
             node_id: self.node_id,
             bus: self.bus,
@@ -212,7 +216,6 @@ impl<'a> TxToken for MockTxToken<'a> {
             // Broadcast (FF:FF:FF:FF:FF:FF) or multicast
             if dest_mac[0] == 0xFF {
                 // Send to all nodes except sender
-                crate::info!("Node {} broadcasting {} bytes", self.node_id, len);
                 for target_id in 1..=5 {
                     if target_id != self.node_id {
                         let packet = Packet {
@@ -222,10 +225,9 @@ impl<'a> TxToken for MockTxToken<'a> {
                         if self.bus.get_sender(target_id).try_send(packet).is_ok() {
                             self.bus.wake_node(target_id);
                         } else {
-                            crate::info!(
+                            info!(
                                 "Node {} failed to send broadcast to {}",
-                                self.node_id,
-                                target_id
+                                self.node_id, target_id
                             );
                         }
                     }
@@ -233,21 +235,14 @@ impl<'a> TxToken for MockTxToken<'a> {
             } else {
                 // Unicast - extract target node ID from last byte of MAC
                 let target_id = dest_mac[5];
-                if target_id >= 1 && target_id <= 5 {
-                    crate::info!(
-                        "Node {} unicasting {} bytes to {}",
-                        self.node_id,
-                        len,
-                        target_id
-                    );
+                if (1..=5).contains(&target_id) {
                     let packet = Packet { data: buffer, len };
                     if self.bus.get_sender(target_id).try_send(packet).is_ok() {
                         self.bus.wake_node(target_id);
                     } else {
-                        crate::info!(
+                        info!(
                             "Node {} failed to send unicast to {}",
-                            self.node_id,
-                            target_id
+                            self.node_id, target_id
                         );
                     }
                 }

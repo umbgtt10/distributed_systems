@@ -14,7 +14,7 @@ use crate::transport::channel::ChannelTransportHub;
 #[cfg(feature = "udp-transport")]
 use crate::transport::net_config::{self, get_node_config};
 #[cfg(feature = "udp-transport")]
-use crate::transport::net_driver::{self, MockNetDriver, NetworkBus};
+use crate::transport::net_driver::{MockNetDriver, NetworkBus};
 #[cfg(feature = "udp-transport")]
 use crate::transport::udp::{self, UdpTransport};
 

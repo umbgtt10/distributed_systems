@@ -68,8 +68,8 @@ impl UdpTransport {
 impl AsyncTransport for UdpTransport {
     async fn send(&mut self, to: NodeId, message: RaftMsg<String, EmbassyLogEntryCollection>) {
         // Send to the sender task via channel
-        if let Err(_) = self.sender.try_send((to, message)) {
-            crate::info!("Node {} outgoing packet dropped (queue full)", self.node_id);
+        if self.sender.try_send((to, message)).is_err() {
+            info!("Node {} outgoing packet dropped (queue full)", self.node_id);
         }
     }
 
@@ -108,7 +108,7 @@ pub async fn run_udp_sender(
 
     // Bind to ephemeral port (0) for sending
     if let Err(e) = socket.bind(0) {
-        crate::info!("Node {} failed to bind UDP sender: {:?}", node_id, e);
+        info!("Node {} failed to bind UDP sender: {:?}", node_id, e);
         return;
     }
 
@@ -121,7 +121,7 @@ pub async fn run_udp_sender(
         IpEndpoint::new(Ipv4Address::new(10, 0, 0, 5).into(), BASE_PORT + 5),
     ];
 
-    crate::info!("Node {} UDP sender task active", node_id);
+    info!("Node {} UDP sender task active", node_id);
 
     loop {
         let (to, message) = receiver.receive().await;
@@ -133,7 +133,7 @@ pub async fn run_udp_sender(
         let message_bytes = match postcard::to_allocvec(&wire_msg) {
             Ok(bytes) => bytes,
             Err(_) => {
-                crate::info!("Node {} failed to serialize message", node_id);
+                info!("Node {} failed to serialize message", node_id);
                 continue;
             }
         };
@@ -148,19 +148,19 @@ pub async fn run_udp_sender(
         let bytes = match postcard::to_allocvec(&envelope) {
             Ok(bytes) => bytes,
             Err(_) => {
-                crate::info!("Node {} failed to serialize envelope", node_id);
+                info!("Node {} failed to serialize envelope", node_id);
                 continue;
             }
         };
 
         let target_addr = peer_addrs[(to - 1) as usize];
 
-        crate::info!("Node {} sending to {} via UDP", node_id, to);
+        // crate::info!("Node {} sending to {} via UDP", node_id, to);
 
         if let Err(e) = socket.send_to(&bytes, target_addr).await {
-            crate::info!("Node {} failed to send UDP packet: {:?}", node_id, e);
+            info!("Node {} failed to send UDP packet: {:?}", node_id, e);
         } else {
-            crate::info!("Node {} sent {} bytes to {}", node_id, bytes.len(), to);
+            // crate::info!("Node {} sent {} bytes to {}", node_id, bytes.len(), to);
         }
     }
 }
@@ -186,28 +186,22 @@ pub async fn run_udp_listener(
 
     let port = BASE_PORT + node_id as u16;
     if let Err(e) = socket.bind(port) {
-        crate::info!("Node {} failed to bind UDP listener: {:?}", node_id, e);
+        info!("Node {} failed to bind UDP listener: {:?}", node_id, e);
         return;
     }
 
-    crate::info!("Node {} listening on UDP port {}", node_id, port);
+    info!("Node {} listening on UDP port {}", node_id, port);
 
     loop {
         let mut buf = vec![0u8; MAX_PACKET_SIZE];
 
         match socket.recv_from(&mut buf).await {
-            Ok((len, from_addr)) => {
-                crate::info!(
-                    "Node {} received {} bytes from {:?}",
-                    node_id,
-                    len,
-                    from_addr
-                );
+            Ok((len, _from_addr)) => {
                 // Deserialize envelope
                 let envelope: Envelope = match postcard::from_bytes(&buf[..len]) {
                     Ok(env) => env,
                     Err(_) => {
-                        crate::info!("Node {} failed to deserialize envelope", node_id);
+                        info!("Node {} failed to deserialize envelope", node_id);
                         continue;
                     }
                 };
@@ -216,7 +210,7 @@ pub async fn run_udp_listener(
                 let wire_msg: WireRaftMsg = match postcard::from_bytes(&envelope.message_bytes) {
                     Ok(msg) => msg,
                     Err(_) => {
-                        crate::info!("Node {} failed to deserialize wire message", node_id);
+                        info!("Node {} failed to deserialize wire message", node_id);
                         continue;
                     }
                 };
@@ -226,18 +220,18 @@ pub async fn run_udp_listener(
                 {
                     Ok(msg) => msg,
                     Err(_) => {
-                        crate::info!("Node {} failed to convert wire message", node_id);
+                        info!("Node {} failed to convert wire message", node_id);
                         continue;
                     }
                 };
 
                 // Push to channel (drop if full)
-                if let Err(_) = sender.try_send((envelope.from, message)) {
-                    crate::info!("Node {} incoming packet dropped (channel full)", node_id);
+                if sender.try_send((envelope.from, message)).is_err() {
+                    info!("Node {} incoming packet dropped (channel full)", node_id);
                 }
             }
             Err(e) => {
-                crate::info!("Node {} UDP receive error: {:?}", node_id, e);
+                info!("Node {} UDP receive error: {:?}", node_id, e);
                 embassy_time::Timer::after(embassy_time::Duration::from_millis(100)).await;
             }
         }
