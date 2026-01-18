@@ -177,8 +177,17 @@ This is a **proof-of-concept**, not production code:
 - Fixed 5-node cluster (hardcoded)
 - No persistent storage (log resets on restart)
 - No log compaction/snapshotting
-- Simplified error handling
+- No dynamic cluster membership
 - QEMU-only (not tested on real hardware)
+
+### Validated Features
+
+- ✅ **Leader Election**: Randomized timeouts break split-vote deadlocks
+- ✅ **Log Replication**: Entries replicated to quorum with consistency checks
+- ✅ **Commit Index Advancement**: Leader tracks follower progress and advances commit
+- ✅ **Client Request Routing**: Followers transparently forward to leader
+- ✅ **Wait-for-Commit**: Clients block until replication completes
+- ✅ **State Machine Application**: Committed entries applied in order
 
 ## Project Goals
 
@@ -189,6 +198,10 @@ This is a **proof-of-concept**, not production code:
 3. **Clean architecture**: Transport abstraction allows easy feature switching
 4. **Embassy integration**: Proper use of async tasks, timers, and channels
 5. **Scalable structure**: Bifurcation pattern ready for additional transports (UART, CAN, etc.)
+6. **Leader election**: Randomized timeouts ensure fast convergence (typically 3-5 terms)
+7. **Log replication**: Commands replicated to majority before acknowledgment
+8. **Client request handling**: Transparent forwarding from followers to leader
+9. **Commit-based acknowledgments**: Clients notified only after quorum replication
 
 ### Future Enhancements (Out of Scope)
 

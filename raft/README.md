@@ -80,19 +80,21 @@ This crate is **never allowed** to depend on:
 
 ## Implementation Phases
 
-### Phase 0 — Raft Core
+### Phase 0 — Raft Core ✅
 
 * Pure in-memory implementation
 * Deterministic execution
 * No IO, no randomness
 * Focus: safety & liveness
 
-Exit criteria:
+Exit criteria (all met):
 
-* Single-leader guarantee
-* Log-matching property
-* Monotonic commit index
-* Correct recovery from partitions
+* ✅ Single-leader guarantee
+* ✅ Log-matching property
+* ✅ Monotonic commit index
+* ✅ Correct recovery from partitions
+
+**Status**: Complete. Validated in Embassy-sim with UDP transport.
 
 ---
 
@@ -130,7 +132,23 @@ Purpose:
 
 ---
 
-### Phase 3 — Cloud-Native (AWS)
+### Phase 3 — Raft Advanced Features
+
+* Log compaction and snapshotting
+* Dynamic membership changes
+* Read-only query optimization
+* Leadership transfer
+* Pre-vote protocol
+
+Purpose:
+
+* Complete Raft implementation for production readiness
+* Bounded memory usage for long-running clusters
+* Safe reconfiguration without downtime
+
+---
+
+### Phase 4 — Cloud-Native (AWS)
 
 * `std` + Tokio runtime
 * Real networking (e.g. gRPC/TCP)
@@ -165,6 +183,18 @@ The test harness is treated as a **formal contract**.
 
 ---
 
+## Advanced Raft Features (To Be Implemented)
+
+The current implementation covers the core Raft protocol. The following advanced features remain to be implemented:
+
+- 🔲 **Log Compaction/Snapshotting**: Bounded memory usage for long-running clusters
+- 🔲 **Dynamic Membership**: Adding/removing nodes from the cluster
+- 🔲 **Read-Only Queries**: Linearizable reads without log entries
+- 🔲 **Leadership Transfer**: Graceful handoff for maintenance
+- 🔲 **Pre-vote Protocol**: Prevent disruptions from partitioned nodes
+
+---
+
 ## Non-Goals
 
 This project intentionally does **not** aim to:
@@ -192,7 +222,19 @@ This project exists to demonstrate:
 
 ## Status
 
-🚧 Work in progress — currently in **Raft Core & Simulation** phase.
+### Phase Progress
+
+- ✅ **Phase 0 — Raft Core**: Complete (Leader election, log replication, commit rules)
+- ✅ **Phase 1 — Simulation & Proof**: Complete (raft-sim with deterministic test harness)
+- ✅ **Phase 2 — `no_std + Embassy`**: Complete (Embassy-sim with UDP transport)
+  - Leader election with randomized timeouts
+  - Log replication with quorum tracking
+  - Client request handling with transparent forwarding
+  - Commit-based acknowledgments
+- 🔲 **Phase 3 — Raft Advanced Features**: Planned (log compaction, dynamic membership, etc.)
+- 🔲 **Phase 4 — Cloud-Native (AWS)**: Planned
+
+**Note**: Phase 2 was completed before Phase 1 to validate the abstraction boundaries work in the most constrained environment first.
 
 ---
 
