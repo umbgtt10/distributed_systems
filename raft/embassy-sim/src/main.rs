@@ -125,6 +125,20 @@ async fn main(spawner: Spawner) {
 
         info!("All network stacks ready!");
 
+        // Receiver channels for UDP listeners (Incoming packets)
+        static CHANNEL_1: transport::udp::RaftChannel = transport::udp::RaftChannel::new();
+        static CHANNEL_2: transport::udp::RaftChannel = transport::udp::RaftChannel::new();
+        static CHANNEL_3: transport::udp::RaftChannel = transport::udp::RaftChannel::new();
+        static CHANNEL_4: transport::udp::RaftChannel = transport::udp::RaftChannel::new();
+        static CHANNEL_5: transport::udp::RaftChannel = transport::udp::RaftChannel::new();
+
+        // Sender channels for UDP senders (Outgoing packets)
+        static OUT_CHANNEL_1: transport::udp::RaftChannel = transport::udp::RaftChannel::new();
+        static OUT_CHANNEL_2: transport::udp::RaftChannel = transport::udp::RaftChannel::new();
+        static OUT_CHANNEL_3: transport::udp::RaftChannel = transport::udp::RaftChannel::new();
+        static OUT_CHANNEL_4: transport::udp::RaftChannel = transport::udp::RaftChannel::new();
+        static OUT_CHANNEL_5: transport::udp::RaftChannel = transport::udp::RaftChannel::new();
+
         // Create UDP transports and spawn Raft nodes
         unsafe {
             for node_id in 1..=5 {
@@ -137,8 +151,39 @@ async fn main(spawner: Spawner) {
                     _ => unreachable!(),
                 };
 
+                // Inbox (Listener -> Raft)
+                let (inbox_sender, inbox_receiver) = match node_id {
+                    1 => (CHANNEL_1.sender(), CHANNEL_1.receiver()),
+                    2 => (CHANNEL_2.sender(), CHANNEL_2.receiver()),
+                    3 => (CHANNEL_3.sender(), CHANNEL_3.receiver()),
+                    4 => (CHANNEL_4.sender(), CHANNEL_4.receiver()),
+                    5 => (CHANNEL_5.sender(), CHANNEL_5.receiver()),
+                    _ => unreachable!(),
+                };
+
+                // Outbox (Raft -> Sender)
+                let (outbox_sender, outbox_receiver) = match node_id {
+                    1 => (OUT_CHANNEL_1.sender(), OUT_CHANNEL_1.receiver()),
+                    2 => (OUT_CHANNEL_2.sender(), OUT_CHANNEL_2.receiver()),
+                    3 => (OUT_CHANNEL_3.sender(), OUT_CHANNEL_3.receiver()),
+                    4 => (OUT_CHANNEL_4.sender(), OUT_CHANNEL_4.receiver()),
+                    5 => (OUT_CHANNEL_5.sender(), OUT_CHANNEL_5.receiver()),
+                    _ => unreachable!(),
+                };
+
+                // Spawn persistent UDP listener (Feeds Inbox)
+                spawner
+                    .spawn(udp_listener_task(node_id, *stack, inbox_sender))
+                    .unwrap();
+
+                // Spawn persistent UDP sender (Consumes Outbox)
+                spawner
+                    .spawn(udp_sender_task(node_id, *stack, outbox_receiver))
+                    .unwrap();
+
                 // Stack is Copy, so we can pass it directly
-                let transport = UdpTransport::new(node_id, stack);
+                // UdpTransport now takes (node_id, outbound_sender, inbound_receiver)
+                let transport = UdpTransport::new(node_id, outbox_sender, inbox_receiver);
 
                 spawner
                     .spawn(udp_raft_node_task(node_id, transport, cancel.clone()))
@@ -204,4 +249,34 @@ async fn udp_raft_node_task(
     cancel: CancellationToken,
 ) {
     embassy_node::raft_node_task_impl(node_id, transport, cancel).await
+}
+
+// UDP Listener Task Wrapper
+#[cfg(feature = "udp-transport")]
+#[embassy_executor::task(pool_size = 5)]
+async fn udp_listener_task(
+    node_id: u64, // Using u64 to match other tasks, but cast to u8/u16 inside
+    stack: embassy_net::Stack<'static>,
+    sender: transport::udp::RaftSender,
+) {
+    if node_id > 255 {
+        crate::info!("Invalid node_id for listener: {}", node_id);
+        return;
+    }
+    transport::udp::run_udp_listener(node_id, stack, sender).await
+}
+
+// UDP Sender Task Wrapper
+#[cfg(feature = "udp-transport")]
+#[embassy_executor::task(pool_size = 5)]
+async fn udp_sender_task(
+    node_id: u64,
+    stack: embassy_net::Stack<'static>,
+    receiver: transport::udp::RaftReceiver,
+) {
+    if node_id > 255 {
+        crate::info!("Invalid node_id for sender: {}", node_id);
+        return;
+    }
+    transport::udp::run_udp_sender(node_id, stack, receiver).await
 }

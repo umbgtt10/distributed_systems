@@ -10,8 +10,11 @@
 
 use alloc::vec;
 use alloc::vec::Vec;
+use core::cell::RefCell;
+use core::task::Waker;
 use embassy_net_driver::{Capabilities, Driver, HardwareAddress, LinkState, RxToken, TxToken};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::blocking_mutex::Mutex;
 use embassy_sync::channel::Channel;
 
 const MTU: usize = 1500;
@@ -23,6 +26,8 @@ pub struct NetworkBus {
     // One queue per node (indexed by last MAC byte - 1)
     // Node 1 (MAC ending in 01) uses queues[0], etc.
     queues: [Channel<CriticalSectionRawMutex, Packet, CHANNEL_SIZE>; 5],
+    // Wakers to notify nodes when packets arrive
+    wakers: [Mutex<CriticalSectionRawMutex, RefCell<Option<Waker>>>; 5],
 }
 
 #[derive(Clone)]
@@ -41,6 +46,13 @@ impl NetworkBus {
                 Channel::new(),
                 Channel::new(),
             ],
+            wakers: [
+                Mutex::new(RefCell::new(None)),
+                Mutex::new(RefCell::new(None)),
+                Mutex::new(RefCell::new(None)),
+                Mutex::new(RefCell::new(None)),
+                Mutex::new(RefCell::new(None)),
+            ],
         }
     }
 
@@ -52,6 +64,28 @@ impl NetworkBus {
     /// Get receiver for a specific node's queue
     fn get_receiver(&self, node_id: u8) -> &Channel<CriticalSectionRawMutex, Packet, CHANNEL_SIZE> {
         &self.queues[(node_id - 1) as usize]
+    }
+
+    /// Register a waker for a node
+    fn register_waker(&self, node_id: u8, waker: &Waker) {
+        self.wakers[(node_id - 1) as usize].lock(|cell| {
+            let mut w = cell.borrow_mut();
+            if match w.as_ref() {
+                Some(old_waker) => !old_waker.will_wake(waker),
+                None => true,
+            } {
+                *w = Some(waker.clone());
+            }
+        });
+    }
+
+    /// Wake a node
+    fn wake_node(&self, node_id: u8) {
+        self.wakers[(node_id - 1) as usize].lock(|cell| {
+            if let Some(waker) = cell.borrow_mut().take() {
+                waker.wake();
+            }
+        });
     }
 }
 
@@ -91,8 +125,9 @@ impl Driver for MockNetDriver {
 
     fn receive(
         &mut self,
-        _cx: &mut core::task::Context,
+        cx: &mut core::task::Context,
     ) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
+        crate::info!("Node {} receive polling", self.node_id);
         // Try to get a packet from our queue
         if let Some(packet) = self.try_recv_packet() {
             let rx = MockRxToken {
@@ -105,12 +140,15 @@ impl Driver for MockNetDriver {
 
             Some((rx, tx))
         } else {
+            // No packet, register waker so we get notified when one arrives
+            self.bus.register_waker(self.node_id, cx.waker());
             None
         }
     }
 
     fn transmit(&mut self, _cx: &mut core::task::Context) -> Option<Self::TxToken<'_>> {
         // Always ready to transmit
+        crate::info!("Node {} transmit ready check", self.node_id);
         Some(MockTxToken {
             node_id: self.node_id,
             bus: self.bus,
@@ -174,21 +212,44 @@ impl<'a> TxToken for MockTxToken<'a> {
             // Broadcast (FF:FF:FF:FF:FF:FF) or multicast
             if dest_mac[0] == 0xFF {
                 // Send to all nodes except sender
+                crate::info!("Node {} broadcasting {} bytes", self.node_id, len);
                 for target_id in 1..=5 {
                     if target_id != self.node_id {
                         let packet = Packet {
                             data: buffer.clone(),
                             len,
                         };
-                        let _ = self.bus.get_sender(target_id).try_send(packet);
+                        if self.bus.get_sender(target_id).try_send(packet).is_ok() {
+                            self.bus.wake_node(target_id);
+                        } else {
+                            crate::info!(
+                                "Node {} failed to send broadcast to {}",
+                                self.node_id,
+                                target_id
+                            );
+                        }
                     }
                 }
             } else {
                 // Unicast - extract target node ID from last byte of MAC
                 let target_id = dest_mac[5];
                 if target_id >= 1 && target_id <= 5 {
+                    crate::info!(
+                        "Node {} unicasting {} bytes to {}",
+                        self.node_id,
+                        len,
+                        target_id
+                    );
                     let packet = Packet { data: buffer, len };
-                    let _ = self.bus.get_sender(target_id).try_send(packet);
+                    if self.bus.get_sender(target_id).try_send(packet).is_ok() {
+                        self.bus.wake_node(target_id);
+                    } else {
+                        crate::info!(
+                            "Node {} failed to send unicast to {}",
+                            self.node_id,
+                            target_id
+                        );
+                    }
                 }
             }
         }
