@@ -75,6 +75,12 @@ pub struct ChannelTransport {
 impl ChannelTransport {
     /// Send a message to a peer
     pub async fn send(&self, to: NodeId, message: RaftMsg<String, EmbassyLogEntryCollection>) {
+        // Bounds check for node IDs (1-5)
+        if to == 0 || to > 5 {
+            info!("Invalid target node: {}, ignoring message", to);
+            return;
+        }
+
         let envelope = Envelope {
             from: self.node_id,
             to,

@@ -2,6 +2,10 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
+// Enforce mutual exclusivity of transport features
+#[cfg(all(feature = "channel-transport", feature = "udp-transport"))]
+compile_error!("Features 'channel-transport' and 'udp-transport' are mutually exclusive. Use --no-default-features to disable 'udp-transport'.");
+
 pub mod async_transport;
 pub mod embassy_transport;
 

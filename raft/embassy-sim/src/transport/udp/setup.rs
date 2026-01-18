@@ -23,7 +23,11 @@ pub async fn initialize_cluster(spawner: Spawner, cancel: CancellationToken) {
 
     // Create network stacks for all 5 nodes
     for node_id in 1..=5 {
-        // Unsafe required for getting static mutable resources
+        // SAFETY: Each node gets a unique NodeNetworkResources instance from
+        // get_node_resources(node_id), which returns a mutable reference to a
+        // distinct static resource. The resources array has 5 separate entries,
+        // ensuring no aliasing occurs. The mutable reference is consumed by
+        // embassy_net::new() and not accessed elsewhere during this initialization.
         let (stack, runner) = unsafe {
             let driver = MockNetDriver::new(node_id, &NETWORK_BUS);
             let config = get_node_config(node_id);
