@@ -21,69 +21,49 @@ use crate::transport::udp::{self, UdpTransport};
 pub async fn initialize_cluster(spawner: Spawner, cancel: CancellationToken) {
     #[cfg(feature = "udp-transport")]
     {
+        use alloc::vec::Vec;
         info!("Using UDP transport (simulated Ethernet)");
         info!("WireRaftMsg serialization layer: COMPLETE ✓");
 
         // Create shared network bus for all nodes
         static NETWORK_BUS: NetworkBus = NetworkBus::new();
 
-        // Storage for network stacks (one per node)
-        static mut STACK_1: Option<embassy_net::Stack<'static>> = None;
-        static mut STACK_2: Option<embassy_net::Stack<'static>> = None;
-        static mut STACK_3: Option<embassy_net::Stack<'static>> = None;
-        static mut STACK_4: Option<embassy_net::Stack<'static>> = None;
-        static mut STACK_5: Option<embassy_net::Stack<'static>> = None;
+        // Local storage for network stack handles
+        let mut stacks = Vec::with_capacity(5);
 
         // Create network stacks for all 5 nodes
         for node_id in 1..=5 {
-            unsafe {
+            // Unsafe required for getting static mutable resources
+            let (stack, runner) = unsafe {
                 let driver = MockNetDriver::new(node_id, &NETWORK_BUS);
                 let config = get_node_config(node_id);
                 let resources = net_config::get_node_resources(node_id);
                 let seed = 0x0123_4567_89AB_CDEF_u64 + node_id as u64;
 
-                let (stack, runner) =
-                    embassy_net::new(driver, config, &mut resources.resources, seed);
+                embassy_net::new(driver, config, &mut resources.resources, seed)
+            };
 
-                // Store stack in static storage
-                match node_id {
-                    1 => STACK_1 = Some(stack),
-                    2 => STACK_2 = Some(stack),
-                    3 => STACK_3 = Some(stack),
-                    4 => STACK_4 = Some(stack),
-                    5 => STACK_5 = Some(stack),
-                    _ => unreachable!(),
-                }
+            stacks.push(stack);
 
-                // Spawn network stack runner task
-                spawner.spawn(net_stack_task(node_id, runner)).unwrap();
-            }
+            // Spawn network stack runner task
+            spawner.spawn(net_stack_task(node_id, runner)).unwrap();
         }
 
         info!("Network stacks created, waiting for configuration...");
 
         // Wait for all stacks to be configured
-        unsafe {
-            for node_id in 1..=5 {
-                let stack = match node_id {
-                    1 => STACK_1.as_ref().unwrap(),
-                    2 => STACK_2.as_ref().unwrap(),
-                    3 => STACK_3.as_ref().unwrap(),
-                    4 => STACK_4.as_ref().unwrap(),
-                    5 => STACK_5.as_ref().unwrap(),
-                    _ => unreachable!(),
-                };
+        for (i, stack) in stacks.iter().enumerate() {
+            let node_id = (i + 1) as u8;
 
-                // Wait for link up and configuration
-                stack.wait_link_up().await;
-                stack.wait_config_up().await;
+            // Wait for link up and configuration
+            stack.wait_link_up().await;
+            stack.wait_config_up().await;
 
-                info!(
-                    "Node {} network configured: {:?}",
-                    node_id,
-                    stack.config_v4()
-                );
-            }
+            info!(
+                "Node {} network configured: {:?}",
+                node_id,
+                stack.config_v4()
+            );
         }
 
         info!("All network stacks ready!");
@@ -103,57 +83,49 @@ pub async fn initialize_cluster(spawner: Spawner, cancel: CancellationToken) {
         static OUT_CHANNEL_5: udp::RaftChannel = udp::RaftChannel::new();
 
         // Create UDP transports and spawn Raft nodes
-        unsafe {
-            for node_id in 1..=5 {
-                let stack = match node_id {
-                    1 => STACK_1.as_ref().unwrap(),
-                    2 => STACK_2.as_ref().unwrap(),
-                    3 => STACK_3.as_ref().unwrap(),
-                    4 => STACK_4.as_ref().unwrap(),
-                    5 => STACK_5.as_ref().unwrap(),
-                    _ => unreachable!(),
-                };
+        for (i, stack) in stacks.iter().enumerate() {
+            let node_id = (i + 1) as u8;
+            let node_id_u64 = node_id as u64;
 
-                // Inbox (Listener -> Raft)
-                let (inbox_sender, inbox_receiver) = match node_id {
-                    1 => (CHANNEL_1.sender(), CHANNEL_1.receiver()),
-                    2 => (CHANNEL_2.sender(), CHANNEL_2.receiver()),
-                    3 => (CHANNEL_3.sender(), CHANNEL_3.receiver()),
-                    4 => (CHANNEL_4.sender(), CHANNEL_4.receiver()),
-                    5 => (CHANNEL_5.sender(), CHANNEL_5.receiver()),
-                    _ => unreachable!(),
-                };
+            // Inbox (Listener -> Raft)
+            let (inbox_sender, inbox_receiver) = match node_id {
+                1 => (CHANNEL_1.sender(), CHANNEL_1.receiver()),
+                2 => (CHANNEL_2.sender(), CHANNEL_2.receiver()),
+                3 => (CHANNEL_3.sender(), CHANNEL_3.receiver()),
+                4 => (CHANNEL_4.sender(), CHANNEL_4.receiver()),
+                5 => (CHANNEL_5.sender(), CHANNEL_5.receiver()),
+                _ => unreachable!(),
+            };
 
-                // Outbox (Raft -> Sender)
-                let (outbox_sender, outbox_receiver) = match node_id {
-                    1 => (OUT_CHANNEL_1.sender(), OUT_CHANNEL_1.receiver()),
-                    2 => (OUT_CHANNEL_2.sender(), OUT_CHANNEL_2.receiver()),
-                    3 => (OUT_CHANNEL_3.sender(), OUT_CHANNEL_3.receiver()),
-                    4 => (OUT_CHANNEL_4.sender(), OUT_CHANNEL_4.receiver()),
-                    5 => (OUT_CHANNEL_5.sender(), OUT_CHANNEL_5.receiver()),
-                    _ => unreachable!(),
-                };
+            // Outbox (Raft -> Sender)
+            let (outbox_sender, outbox_receiver) = match node_id {
+                1 => (OUT_CHANNEL_1.sender(), OUT_CHANNEL_1.receiver()),
+                2 => (OUT_CHANNEL_2.sender(), OUT_CHANNEL_2.receiver()),
+                3 => (OUT_CHANNEL_3.sender(), OUT_CHANNEL_3.receiver()),
+                4 => (OUT_CHANNEL_4.sender(), OUT_CHANNEL_4.receiver()),
+                5 => (OUT_CHANNEL_5.sender(), OUT_CHANNEL_5.receiver()),
+                _ => unreachable!(),
+            };
 
-                // Spawn persistent UDP listener (Feeds Inbox)
-                spawner
-                    .spawn(udp_listener_task(node_id, *stack, inbox_sender))
-                    .unwrap();
+            // Spawn persistent UDP listener (Feeds Inbox)
+            spawner
+                .spawn(udp_listener_task(node_id_u64, *stack, inbox_sender))
+                .unwrap();
 
-                // Spawn persistent UDP sender (Consumes Outbox)
-                spawner
-                    .spawn(udp_sender_task(node_id, *stack, outbox_receiver))
-                    .unwrap();
+            // Spawn persistent UDP sender (Consumes Outbox)
+            spawner
+                .spawn(udp_sender_task(node_id_u64, *stack, outbox_receiver))
+                .unwrap();
 
-                // Stack is Copy, so we can pass it directly
-                // UdpTransport now takes (node_id, outbound_sender, inbound_receiver)
-                let transport = UdpTransport::new(node_id, outbox_sender, inbox_receiver);
+            // Stack is Copy, so we can pass it directly
+            // UdpTransport now takes (node_id, outbound_sender, inbound_receiver)
+            let transport = UdpTransport::new(node_id_u64, outbox_sender, inbox_receiver);
 
-                spawner
-                    .spawn(udp_raft_node_task(node_id, transport, cancel.clone()))
-                    .unwrap();
+            spawner
+                .spawn(udp_raft_node_task(node_id_u64, transport, cancel.clone()))
+                .unwrap();
 
-                info!("Spawned UDP node {}", node_id);
-            }
+            info!("Spawned UDP node {}", node_id);
         }
 
         info!("All UDP nodes started!");

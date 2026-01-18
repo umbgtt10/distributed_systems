@@ -12,6 +12,16 @@ use raft_core::types::NodeId;
 /// Trait for async transport layers
 ///
 /// Implementations can use channels, UDP, UART, CAN bus, etc.
+///
+/// # Note on `async fn` in traits
+/// We intentionally use native `async fn` in traits instead of the `async-trait` crate or explicit
+/// `impl Future` return types for the following reasons:
+/// 1. **Zero-Cost**: Avoids the heap allocation and dynamic dispatch (Boxing) overhead of `async-trait`,
+///    which is crucial for embedded/Embassy contexts.
+/// 2. **Performance**: Compiles down to efficient state machines.
+/// 3. **Usage**: This is an internal application trait, so the auto-trait bound limitations (Send)
+///    warned by the compiler are acceptable in this specific `no_std` context.
+#[allow(async_fn_in_trait)]
 pub trait AsyncTransport {
     /// Send a message to a specific peer
     async fn send(&mut self, to: NodeId, message: RaftMsg<String, EmbassyLogEntryCollection>);
