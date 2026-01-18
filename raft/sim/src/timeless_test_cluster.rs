@@ -16,7 +16,7 @@ use crate::{
     in_memory_node_collection::InMemoryNodeCollection,
     in_memory_state_machine::InMemoryStateMachine, in_memory_storage::InMemoryStorage,
     in_memory_transport::InMemoryTransport, message_broker::MessageBroker,
-    no_action_timer::DummyTimer,
+    no_action_timer::DummyTimer, null_observer::NullObserver,
 };
 
 pub type TestNode = RaftNode<
@@ -28,6 +28,7 @@ pub type TestNode = RaftNode<
     InMemoryLogEntryCollection,
     InMemoryMapCollection,
     DummyTimer,
+    NullObserver<String, InMemoryLogEntryCollection>,
 >;
 
 pub struct TimelessTestCluster {
@@ -61,7 +62,11 @@ impl TimelessTestCluster {
         let node = RaftNodeBuilder::new(id, storage, InMemoryStateMachine::new())
             .with_election(ElectionManager::new(DummyTimer))
             .with_replication(LogReplicationManager::new())
-            .with_transport(transport, InMemoryNodeCollection::new());
+            .with_transport(
+                transport,
+                InMemoryNodeCollection::new(),
+                NullObserver::new(),
+            );
 
         self.nodes.insert(id, node);
     }
@@ -113,7 +118,7 @@ impl TimelessTestCluster {
             let new_node = RaftNodeBuilder::new(node_id, storage, state_machine)
                 .with_election(ElectionManager::new(DummyTimer))
                 .with_replication(LogReplicationManager::new())
-                .with_transport(transport, expected_peers);
+                .with_transport(transport, expected_peers, NullObserver::new());
 
             self.nodes.insert(node_id, new_node);
         }

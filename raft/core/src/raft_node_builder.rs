@@ -5,8 +5,9 @@
 use crate::{
     election_manager::ElectionManager, log_entry_collection::LogEntryCollection,
     log_replication_manager::LogReplicationManager, map_collection::MapCollection,
-    node_collection::NodeCollection, raft_node::RaftNode, state_machine::StateMachine,
-    storage::Storage, timer_service::TimerService, transport::Transport, types::NodeId,
+    node_collection::NodeCollection, observer::Observer, raft_node::RaftNode,
+    state_machine::StateMachine, storage::Storage, timer_service::TimerService,
+    transport::Transport, types::NodeId,
 };
 
 /// Builder for constructing a RaftNode with proper initialization order
@@ -125,13 +126,19 @@ where
     TS: TimerService,
     M: MapCollection,
 {
-    /// Add transport and peers to complete construction
-    pub fn with_transport<T, L>(self, transport: T, peers: C) -> RaftNode<T, S, P, SM, C, L, M, TS>
+    /// Add transport, peers, and observer to complete construction
+    pub fn with_transport<T, L, O>(
+        self,
+        transport: T,
+        peers: C,
+        observer: O,
+    ) -> RaftNode<T, S, P, SM, C, L, M, TS, O>
     where
         P: Clone,
         T: Transport<Payload = P, LogEntries = L>,
         L: LogEntryCollection<Payload = P> + Clone,
         S: Storage<Payload = P, LogEntryCollection = L> + Clone,
+        O: Observer<Payload = P, LogEntries = L>,
     {
         RaftNode::new_from_builder(
             self.id,
@@ -141,6 +148,7 @@ where
             self.replication,
             transport,
             peers,
+            observer,
         )
     }
 }

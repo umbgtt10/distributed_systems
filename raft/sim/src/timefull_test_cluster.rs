@@ -3,6 +3,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::mocked_timer_service::{MockClock, MockTimerService};
+use crate::null_observer::NullObserver;
 use crate::{
     in_memory_log_entry_collection::InMemoryLogEntryCollection,
     in_memory_map_collection::InMemoryMapCollection,
@@ -27,6 +28,7 @@ type InMemoryTimefullRaftNode = RaftNode<
     InMemoryLogEntryCollection,
     InMemoryMapCollection,
     MockTimerService,
+    NullObserver<String, InMemoryLogEntryCollection>,
 >;
 
 pub struct TimefullTestCluster {
@@ -74,7 +76,7 @@ impl TimefullTestCluster {
         let node = RaftNodeBuilder::new(id, InMemoryStorage::new(), InMemoryStateMachine::new())
             .with_election(ElectionManager::new(timer))
             .with_replication(LogReplicationManager::new())
-            .with_transport(transport, peers);
+            .with_transport(transport, peers, NullObserver::new());
 
         self.nodes.insert(id, node);
     }
@@ -110,7 +112,7 @@ impl TimefullTestCluster {
             let new_node = RaftNodeBuilder::new(node_id, storage, state_machine)
                 .with_election(ElectionManager::new(timer))
                 .with_replication(LogReplicationManager::new())
-                .with_transport(transport, peers);
+                .with_transport(transport, peers, NullObserver::new());
 
             self.nodes.insert(node_id, new_node);
         }

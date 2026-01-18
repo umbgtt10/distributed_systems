@@ -14,10 +14,12 @@ use panic_semihosting as _;
 #[macro_use]
 pub mod logging;
 pub mod cancellation_token;
+pub mod config;
 pub mod embassy_log_collection;
 pub mod embassy_map_collection;
 pub mod embassy_node;
 pub mod embassy_node_collection;
+pub mod embassy_observer;
 pub mod embassy_state_machine;
 pub mod embassy_storage;
 pub mod embassy_timer;
@@ -41,8 +43,12 @@ async fn main(spawner: Spawner) {
 
     let cancel = CancellationToken::default();
 
+    // Read observer level from config
+    let observer_level = config::get_observer_level();
+    info!("Observer level: {:?}", observer_level);
+
     // Initialize cluster (handles all network/channel setup internally)
-    transport::setup::initialize_cluster(spawner, cancel.clone()).await;
+    transport::setup::initialize_cluster(spawner, cancel.clone(), observer_level).await;
 
     info!("All nodes started. Observing consensus...");
 

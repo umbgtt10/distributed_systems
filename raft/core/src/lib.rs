@@ -12,6 +12,7 @@ pub mod log_replication_manager;
 pub mod map_collection;
 pub mod node_collection;
 pub mod node_state;
+pub mod observer;
 pub mod raft_messages;
 pub mod raft_node;
 pub mod raft_node_builder;

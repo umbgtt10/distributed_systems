@@ -11,6 +11,7 @@ use crate::{
     map_collection::MapCollection,
     node_collection::NodeCollection,
     node_state::NodeState,
+    observer::{Observer, Role, TimerKind as ObserverTimerKind},
     raft_messages::RaftMsg,
     state_machine::StateMachine,
     storage::Storage,
@@ -19,7 +20,7 @@ use crate::{
     types::{LogIndex, NodeId, Term},
 };
 
-pub struct RaftNode<T, S, P, SM, C, L, M, TS>
+pub struct RaftNode<T, S, P, SM, C, L, M, TS, O>
 where
     P: Clone,
     T: Transport<Payload = P, LogEntries = L>,
@@ -29,6 +30,7 @@ where
     L: LogEntryCollection<Payload = P>,
     M: MapCollection,
     TS: TimerService,
+    O: Observer<Payload = P, LogEntries = L>,
 {
     id: NodeId,
     peers: C,
@@ -37,13 +39,14 @@ where
     transport: T,
     storage: S,
     state_machine: SM,
+    observer: O,
 
     // Delegated responsibilities
     election: ElectionManager<C, TS>,
     replication: LogReplicationManager<M>,
 }
 
-impl<T, S, P, SM, C, L, M, TS> RaftNode<T, S, P, SM, C, L, M, TS>
+impl<T, S, P, SM, C, L, M, TS, O> RaftNode<T, S, P, SM, C, L, M, TS, O>
 where
     P: Clone,
     T: Transport<Payload = P, LogEntries = L>,
@@ -53,8 +56,10 @@ where
     L: LogEntryCollection<Payload = P> + Clone,
     M: MapCollection,
     TS: TimerService,
+    O: Observer<Payload = P, LogEntries = L>,
 {
     /// Internal constructor - use RaftNodeBuilder instead
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new_from_builder(
         id: NodeId,
         storage: S,
@@ -63,6 +68,7 @@ where
         replication: LogReplicationManager<M>,
         transport: T,
         peers: C,
+        observer: O,
     ) -> Self {
         let current_term = storage.current_term();
 
@@ -77,6 +83,7 @@ where
             transport,
             storage,
             state_machine,
+            observer,
             election,
             replication,
         }
@@ -135,9 +142,17 @@ where
     }
 
     fn handle_timer(&mut self, kind: TimerKind) {
+        let observer_kind = match kind {
+            TimerKind::Election => ObserverTimerKind::Election,
+            TimerKind::Heartbeat => ObserverTimerKind::Heartbeat,
+        };
+        self.observer
+            .timer_fired(self.id, observer_kind, self.current_term);
+
         match kind {
             TimerKind::Election => {
                 if self.role != NodeState::Leader {
+                    self.observer.election_timeout(self.id, self.current_term);
                     self.start_election();
                 }
             }
@@ -258,6 +273,8 @@ where
     // ============================================================
 
     fn start_election(&mut self) {
+        let old_role = self.node_state_to_role();
+
         let vote_request = self.election.start_election(
             self.id,
             &mut self.current_term,
@@ -265,11 +282,21 @@ where
             &mut self.role,
         );
 
+        self.observer.election_started(self.id, self.current_term);
+        self.observer
+            .role_changed(self.id, old_role, Role::Candidate, self.current_term);
+        self.observer.voted_for(self.id, self.id, self.current_term);
+
         self.broadcast(vote_request);
     }
 
     fn become_leader(&mut self) {
+        let old_role = self.node_state_to_role();
         self.role = NodeState::Leader;
+
+        self.observer
+            .role_changed(self.id, old_role, Role::Leader, self.current_term);
+        self.observer.leader_elected(self.id, self.current_term);
 
         // Initialize replication state
         self.replication
@@ -283,11 +310,21 @@ where
     }
 
     fn step_down(&mut self, new_term: Term) {
+        let old_role = self.node_state_to_role();
+        let old_term = self.current_term;
+
+        if old_role == Role::Leader {
+            self.observer.leader_lost(self.id, old_term, new_term);
+        }
+
         self.current_term = new_term;
         self.storage.set_current_term(new_term);
         self.role = NodeState::Follower;
         self.storage.set_voted_for(None);
         self.election.timer_service_mut().reset_election_timer();
+
+        self.observer
+            .role_changed(self.id, old_role, Role::Follower, new_term);
     }
 
     // ============================================================
@@ -331,6 +368,23 @@ where
                 &self.storage,
             );
             self.send(peer, msg);
+        }
+    }
+
+    // ============================================================
+    // OBSERVER ACCESS
+    // ============================================================
+
+    pub fn observer(&mut self) -> &mut O {
+        &mut self.observer
+    }
+
+    /// Convert NodeState to Observer Role
+    fn node_state_to_role(&self) -> Role {
+        match self.role {
+            NodeState::Follower => Role::Follower,
+            NodeState::Candidate => Role::Candidate,
+            NodeState::Leader => Role::Leader,
         }
     }
 }

@@ -6,12 +6,17 @@ use crate::cancellation_token::CancellationToken;
 use crate::info;
 use alloc::vec::Vec;
 use embassy_executor::Spawner; // Macros
+use raft_core::observer::EventLevel;
 
 use crate::transport::udp::config::{self, get_node_config};
 use crate::transport::udp::driver::{MockNetDriver, NetworkBus};
 use crate::transport::udp::transport::{self, UdpTransport};
 
-pub async fn initialize_cluster(spawner: Spawner, cancel: CancellationToken) {
+pub async fn initialize_cluster(
+    spawner: Spawner,
+    cancel: CancellationToken,
+    observer_level: EventLevel,
+) {
     info!("Using UDP transport (simulated Ethernet)");
     info!("WireRaftMsg serialization layer: COMPLETE ✓");
 
@@ -120,6 +125,7 @@ pub async fn initialize_cluster(spawner: Spawner, cancel: CancellationToken) {
                 node_id_u64,
                 transport_impl,
                 cancel.clone(),
+                observer_level,
             ))
             .unwrap();
 
@@ -144,8 +150,9 @@ async fn udp_raft_node_task(
     node_id: u64,
     transport: crate::transport::udp::transport::UdpTransport,
     cancel: CancellationToken,
+    observer_level: EventLevel,
 ) {
-    crate::embassy_node::raft_node_task_impl(node_id, transport, cancel).await
+    crate::embassy_node::raft_node_task_impl(node_id, transport, cancel, observer_level).await
 }
 
 // UDP Listener Task Wrapper

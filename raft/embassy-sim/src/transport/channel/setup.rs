@@ -5,12 +5,17 @@
 use crate::cancellation_token::CancellationToken;
 use crate::info;
 use embassy_executor::Spawner;
+use raft_core::observer::EventLevel;
 
 use crate::transport::channel::transport::ChannelTransportHub;
 
 // --- In-Memory Channel Initialization ---
 
-pub async fn initialize_cluster(spawner: Spawner, cancel: CancellationToken) {
+pub async fn initialize_cluster(
+    spawner: Spawner,
+    cancel: CancellationToken,
+    observer_level: EventLevel,
+) {
     info!("Using Channel transport (In-Memory)");
 
     // Get the singleton hub
@@ -28,6 +33,7 @@ pub async fn initialize_cluster(spawner: Spawner, cancel: CancellationToken) {
                 node_id_u64,
                 transport,
                 cancel.clone(),
+                observer_level,
             ))
             .unwrap();
     }
@@ -39,6 +45,7 @@ async fn channel_raft_node_task(
     node_id: u64,
     transport: crate::transport::channel::ChannelTransport,
     cancel: CancellationToken,
+    observer_level: EventLevel,
 ) {
-    crate::embassy_node::raft_node_task_impl(node_id, transport, cancel).await
+    crate::embassy_node::raft_node_task_impl(node_id, transport, cancel, observer_level).await
 }
