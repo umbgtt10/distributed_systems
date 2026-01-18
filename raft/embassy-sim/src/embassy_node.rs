@@ -71,7 +71,6 @@ pub async fn raft_node_task_impl<T: AsyncTransport>(
         let expired_timers = timer_service.check_expired();
 
         for timer_kind in expired_timers.iter() {
-            info!("Node {} timer fired: {:?}", node_id, timer_kind);
             node.on_event(Event::TimerFired(timer_kind));
             led.update(node.role());
         }
@@ -95,14 +94,4 @@ pub async fn raft_node_task_impl<T: AsyncTransport>(
     }
 
     info!("Node {} shutdown complete", node_id);
-}
-// Concrete task wrapper for ChannelTransport (required by embassy-executor)
-#[cfg(feature = "channel-transport")]
-#[embassy_executor::task(pool_size = 5)]
-pub async fn raft_node_task(
-    node_id: NodeId,
-    async_transport: crate::transport::channel::ChannelTransport,
-    cancel: CancellationToken,
-) {
-    raft_node_task_impl(node_id, async_transport, cancel).await
 }

@@ -6,7 +6,7 @@
 
 use crate::embassy_log_collection::EmbassyLogEntryCollection;
 use crate::transport::async_transport::AsyncTransport;
-use crate::transport::raft_msg_serde::WireRaftMsg;
+use crate::transport::udp::serde::WireRaftMsg;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
