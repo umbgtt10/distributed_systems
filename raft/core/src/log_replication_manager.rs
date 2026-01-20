@@ -217,10 +217,23 @@ where
         S: Storage<Payload = P, LogEntryCollection = L>,
     {
         if prev_log_index == 0 {
-            true
-        } else {
-            storage.get_entry(prev_log_index).map(|e| e.term) == Some(prev_log_term)
+            return true;
         }
+
+        // First try to get the entry from the log
+        if let Some(entry) = storage.get_entry(prev_log_index) {
+            return entry.term == prev_log_term;
+        }
+
+        // If entry not in log, check if it's at the snapshot point
+        if let Some(snapshot_metadata) = storage.snapshot_metadata() {
+            if prev_log_index == snapshot_metadata.last_included_index {
+                return prev_log_term == snapshot_metadata.last_included_term;
+            }
+        }
+
+        // Entry not found in log or snapshot
+        false
     }
 
     fn apply_committed_entries<P, L, S, SM>(&mut self, storage: &S, state_machine: &mut SM)

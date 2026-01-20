@@ -1044,15 +1044,244 @@ fn test_liveness_follower_accepts_append_at_snapshot_point() {
         raft_core::raft_messages::RaftMsg::AppendEntriesResponse {
             term,
             success,
+            match_index,
+        } => {
+            assert_eq!(term, 3);
+            assert!(
+                success,
+                "Should succeed when prev_log_term matches snapshot term"
+            );
+            assert_eq!(match_index, 16);
+        }
+        _ => panic!("Expected AppendEntriesResponse"),
+    }
+
+    // Verify entry was appended
+    assert_eq!(storage.last_log_index(), 16);
+}
+
+#[test]
+fn test_safety_follower_rejects_append_with_mismatched_snapshot_term() {
+    // Test: Follower has snapshot, receives AppendEntries with prev_log_index at snapshot
+    // but WRONG term - should reject
+    // Expected: Rejects due to term mismatch (proves inconsistency)
+    let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
+    let mut storage = InMemoryStorage::new();
+    storage.set_current_term(3);
+    let mut current_term = 3;
+    let mut role = NodeState::Follower;
+    let mut state_machine = InMemoryStateMachine::new();
+
+    // Follower has entries 1-15, term 2
+    let entries: Vec<LogEntry<String>> = (1..=15)
+        .map(|i| LogEntry {
+            term: 2,
+            payload: format!("cmd{}", i),
+        })
+        .collect();
+    storage.append_entries(&entries);
+
+    // Create snapshot at index 10, term 2
+    for i in 1..=10 {
+        state_machine.apply(&format!("cmd{}", i));
+    }
+    let snapshot_data = state_machine.create_snapshot();
+
+    let snapshot = Snapshot {
+        metadata: SnapshotMetadata {
+            last_included_index: 10,
+            last_included_term: 2, // Snapshot has term 2
+        },
+        data: snapshot_data,
+    };
+    storage.save_snapshot(snapshot);
+
+    // Compact log - discard entries 1-10
+    storage.discard_entries_before(11);
+
+    // Leader sends AppendEntries with prev_log_index=10 but WRONG term
+    let leader_entries = InMemoryLogEntryCollection::new(&[LogEntry {
+        term: 3,
+        payload: "cmd16".to_string(),
+    }]);
+
+    let response = replication.handle_append_entries(
+        3,  // term
+        10, // prev_log_index (at snapshot point)
+        3,  // prev_log_term (WRONG - should be 2!)
+        leader_entries,
+        16,
+        &mut current_term,
+        &mut storage,
+        &mut state_machine,
+        &mut role,
+    );
+
+    match response {
+        raft_core::raft_messages::RaftMsg::AppendEntriesResponse {
+            term,
+            success,
             match_index: _,
         } => {
             assert_eq!(term, 3);
-            // CURRENTLY FAILS - check_log_consistency doesn't check snapshot metadata
-            // This documents the limitation and will be fixed when we implement
-            // snapshot-aware consistency checking or InstallSnapshot RPC
             assert!(
                 !success,
-                "Currently fails - check_log_consistency needs snapshot awareness"
+                "Should reject when prev_log_term doesn't match snapshot term"
+            );
+        }
+        _ => panic!("Expected AppendEntriesResponse"),
+    }
+}
+
+#[test]
+fn test_liveness_both_nodes_compacted_replication_continues() {
+    // Test: Both leader and follower have snapshots, normal replication continues
+    // Expected: Replication succeeds when both have matching snapshots
+    let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
+    let mut storage = InMemoryStorage::new();
+    storage.set_current_term(2);
+    let mut current_term = 2;
+    let mut role = NodeState::Follower;
+    let mut state_machine = InMemoryStateMachine::new();
+
+    // Follower has entries 1-20, creates snapshot at 10, keeps 11-20
+    let entries: Vec<LogEntry<String>> = (1..=20)
+        .map(|i| LogEntry {
+            term: 2,
+            payload: format!("cmd{}", i),
+        })
+        .collect();
+    storage.append_entries(&entries);
+
+    // Create snapshot at index 10, term 2
+    for i in 1..=10 {
+        state_machine.apply(&format!("cmd{}", i));
+    }
+    let snapshot_data = state_machine.create_snapshot();
+
+    let snapshot = Snapshot {
+        metadata: SnapshotMetadata {
+            last_included_index: 10,
+            last_included_term: 2,
+        },
+        data: snapshot_data,
+    };
+    storage.save_snapshot(snapshot);
+
+    // Compact log - discard entries 1-10
+    storage.discard_entries_before(11);
+
+    assert_eq!(storage.first_log_index(), 11);
+    assert_eq!(storage.last_log_index(), 20);
+
+    // Leader also compacted to same point, sends new entries 21-22
+    // with prev_log_index=20 (entry 20 is in follower's log)
+    let leader_entries = InMemoryLogEntryCollection::new(&[
+        LogEntry {
+            term: 2,
+            payload: "cmd21".to_string(),
+        },
+        LogEntry {
+            term: 2,
+            payload: "cmd22".to_string(),
+        },
+    ]);
+
+    let response = replication.handle_append_entries(
+        2,  // term
+        20, // prev_log_index (in follower's log)
+        2,  // prev_log_term
+        leader_entries,
+        22,
+        &mut current_term,
+        &mut storage,
+        &mut state_machine,
+        &mut role,
+    );
+
+    match response {
+        raft_core::raft_messages::RaftMsg::AppendEntriesResponse {
+            term,
+            success,
+            match_index: _,
+        } => {
+            assert_eq!(term, 2);
+            assert!(
+                success,
+                "Should succeed - both nodes compacted, entry 20 exists in log"
+            );
+        }
+        _ => panic!("Expected AppendEntriesResponse"),
+    }
+
+    assert_eq!(storage.last_log_index(), 22);
+}
+
+#[test]
+fn test_safety_follower_rejects_inconsistent_snapshot() {
+    // Test: Follower has snapshot with different term than leader expects
+    // Expected: Rejects (proves divergence before snapshot point)
+    let mut replication = LogReplicationManager::<InMemoryMapCollection>::new();
+    let mut storage = InMemoryStorage::new();
+    storage.set_current_term(3);
+    let mut current_term = 3;
+    let mut role = NodeState::Follower;
+    let mut state_machine = InMemoryStateMachine::new();
+
+    // Follower has entries from term 1, then snapshot
+    let entries: Vec<LogEntry<String>> = (1..=10)
+        .map(|i| LogEntry {
+            term: 1, // Different term!
+            payload: format!("cmd{}", i),
+        })
+        .collect();
+    storage.append_entries(&entries);
+
+    // Create snapshot at index 10, term 1
+    for i in 1..=10 {
+        state_machine.apply(&format!("cmd{}", i));
+    }
+    let snapshot_data = state_machine.create_snapshot();
+
+    let snapshot = Snapshot {
+        metadata: SnapshotMetadata {
+            last_included_index: 10,
+            last_included_term: 1, // Snapshot term is 1
+        },
+        data: snapshot_data,
+    };
+    storage.save_snapshot(snapshot);
+
+    storage.discard_entries_before(11);
+
+    // Leader thinks snapshot should be term 2 (different history!)
+    let leader_entries = InMemoryLogEntryCollection::new(&[LogEntry {
+        term: 3,
+        payload: "cmd11".to_string(),
+    }]);
+
+    let response = replication.handle_append_entries(
+        3,  // term
+        10, // prev_log_index
+        2,  // prev_log_term (expects 2, but follower has 1)
+        leader_entries,
+        11,
+        &mut current_term,
+        &mut storage,
+        &mut state_machine,
+        &mut role,
+    );
+
+    match response {
+        raft_core::raft_messages::RaftMsg::AppendEntriesResponse {
+            term,
+            success,
+            match_index: _,
+        } => {
+            assert_eq!(term, 3);
+            assert!(
+                !success,
+                "Should reject - snapshot term mismatch proves divergent history"
             );
         }
         _ => panic!("Expected AppendEntriesResponse"),
