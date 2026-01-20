@@ -198,7 +198,7 @@ pub async fn run_udp_listener(
         match socket.recv_from(&mut buf).await {
             Ok((len, _from_addr)) => {
                 info!("Node {} received {} bytes", node_id, len);
-                
+
                 // Deserialize envelope
                 let envelope: Envelope = match postcard::from_bytes(&buf[..len]) {
                     Ok(env) => env,
@@ -214,7 +214,10 @@ pub async fn run_udp_listener(
                 let wire_msg: WireRaftMsg = match postcard::from_bytes(&envelope.message_bytes) {
                     Ok(msg) => msg,
                     Err(e) => {
-                        info!("Node {} failed to deserialize wire message: {:?}", node_id, e);
+                        info!(
+                            "Node {} failed to deserialize wire message: {:?}",
+                            node_id, e
+                        );
                         continue;
                     }
                 };

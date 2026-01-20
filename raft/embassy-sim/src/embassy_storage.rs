@@ -36,21 +36,39 @@ pub struct DummySnapshotBuilder;
 
 impl raft_core::snapshot::SnapshotData for DummySnapshotData {
     type Chunk = ();
-    fn len(&self) -> usize { 0 }
-    fn chunk_at(&self, _: usize, _: usize) -> Option<Self::Chunk> { None }
+    fn len(&self) -> usize {
+        0
+    }
+    fn chunk_at(&self, _: usize, _: usize) -> Option<Self::Chunk> {
+        None
+    }
 }
 
 impl raft_core::snapshot::SnapshotBuilder for DummySnapshotBuilder {
     type Output = DummySnapshotData;
     type ChunkInput = ();
-    fn new() -> Self { DummySnapshotBuilder }
-    fn add_chunk(&mut self, _: usize, _: Self::ChunkInput) -> Result<(), raft_core::snapshot::SnapshotBuildError> { Ok(()) }
-    fn is_complete(&self, _: usize) -> bool { true }
-    fn build(self) -> Result<Self::Output, raft_core::snapshot::SnapshotBuildError> { Ok(DummySnapshotData) }
+    fn new() -> Self {
+        DummySnapshotBuilder
+    }
+    fn add_chunk(
+        &mut self,
+        _: usize,
+        _: Self::ChunkInput,
+    ) -> Result<(), raft_core::snapshot::SnapshotBuildError> {
+        Ok(())
+    }
+    fn is_complete(&self, _: usize) -> bool {
+        true
+    }
+    fn build(self) -> Result<Self::Output, raft_core::snapshot::SnapshotBuildError> {
+        Ok(DummySnapshotData)
+    }
 }
 
 impl Clone for DummySnapshotData {
-    fn clone(&self) -> Self { DummySnapshotData }
+    fn clone(&self) -> Self {
+        DummySnapshotData
+    }
 }
 
 impl Storage for EmbassyStorage {
