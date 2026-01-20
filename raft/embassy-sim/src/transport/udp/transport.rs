@@ -6,7 +6,7 @@
 
 use crate::embassy_log_collection::EmbassyLogEntryCollection;
 use crate::transport::async_transport::AsyncTransport;
-use crate::transport::udp::serde::WireRaftMsg;
+use crate::transport::udp::serde_raft_message::WireRaftMsg;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -155,12 +155,8 @@ pub async fn run_udp_sender(
 
         let target_addr = peer_addrs[(to - 1) as usize];
 
-        info!("Node {} sending to {} via UDP", node_id, to);
-
         if let Err(e) = socket.send_to(&bytes, target_addr).await {
             info!("Node {} failed to send UDP packet: {:?}", node_id, e);
-        } else {
-            info!("Node {} sent {} bytes to {}", node_id, bytes.len(), to);
         }
     }
 }
@@ -197,7 +193,6 @@ pub async fn run_udp_listener(
 
         match socket.recv_from(&mut buf).await {
             Ok((len, _from_addr)) => {
-                info!("Node {} received {} bytes", node_id, len);
 
                 // Deserialize envelope
                 let envelope: Envelope = match postcard::from_bytes(&buf[..len]) {
@@ -207,8 +202,6 @@ pub async fn run_udp_listener(
                         continue;
                     }
                 };
-
-                info!("Node {} got envelope from {}", node_id, envelope.from);
 
                 // Deserialize wire message
                 let wire_msg: WireRaftMsg = match postcard::from_bytes(&envelope.message_bytes) {
@@ -222,8 +215,6 @@ pub async fn run_udp_listener(
                     }
                 };
 
-                info!("Node {} deserialized wire message", node_id);
-
                 // Convert to RaftMsg
                 let message: RaftMsg<String, EmbassyLogEntryCollection> = match wire_msg.try_into()
                 {
@@ -233,8 +224,6 @@ pub async fn run_udp_listener(
                         continue;
                     }
                 };
-
-                info!("Node {} converted to RaftMsg, sending to channel", node_id);
 
                 // Push to channel (drop if full)
                 if sender.try_send((envelope.from, message)).is_err() {
