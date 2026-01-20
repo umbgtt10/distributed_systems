@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
+use crate::configuration::Configuration;
+use crate::node_collection::NodeCollection;
 use crate::types::{LogIndex, NodeId};
 
 pub trait MapCollection {
@@ -12,5 +14,9 @@ pub trait MapCollection {
     fn is_empty(&self) -> bool;
     fn values(&self) -> impl Iterator<Item = LogIndex> + '_;
     fn clear(&mut self);
-    fn compute_median(&self, leader_last_index: LogIndex, total_peers: usize) -> Option<LogIndex>;
+    fn compute_median<C: NodeCollection>(
+        &self,
+        leader_last_index: LogIndex,
+        config: &Configuration<C>,
+    ) -> Option<LogIndex>;
 }

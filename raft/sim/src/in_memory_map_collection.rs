@@ -1,6 +1,8 @@
 use indexmap::IndexMap;
 use raft_core::{
+    configuration::Configuration,
     map_collection::MapCollection,
+    node_collection::NodeCollection,
     types::{LogIndex, NodeId},
 };
 
@@ -39,8 +41,12 @@ impl MapCollection for InMemoryMapCollection {
         self.map.clear();
     }
 
-    fn compute_median(&self, leader_last_index: LogIndex, total_peers: usize) -> Option<LogIndex> {
-        let total_nodes = total_peers + 1; // peers + leader
+    fn compute_median<C: NodeCollection>(
+        &self,
+        leader_last_index: LogIndex,
+        config: &Configuration<C>,
+    ) -> Option<LogIndex> {
+        let total_nodes = config.size();
         let mut indices: Vec<LogIndex> = Vec::new();
 
         // Add leader's own index

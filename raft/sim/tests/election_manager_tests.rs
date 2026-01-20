@@ -3,6 +3,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use raft_core::{
+    configuration::Configuration,
     election_manager::ElectionManager,
     log_entry::{EntryType, LogEntry},
     node_collection::NodeCollection,
@@ -355,6 +356,8 @@ fn test_liveness_become_leader_on_majority() {
     peers.push(2).unwrap();
     peers.push(3).unwrap();
 
+    let config = Configuration::new(peers.clone());
+
     // Receive vote from node 2
     let became_leader = election.handle_vote_response(
         2,    // from
@@ -362,7 +365,7 @@ fn test_liveness_become_leader_on_majority() {
         true, // vote_granted
         &current_term,
         &role,
-        peers.len(),
+        &config,
     );
 
     if became_leader {
@@ -396,10 +399,10 @@ fn test_liveness_stay_candidate_without_majority() {
     for i in 2..=5 {
         peers.push(i).unwrap();
     }
+    let config = Configuration::new(peers.clone());
 
     // Receive only 1 vote (self + 1 = 2/5)
-    let became_leader =
-        election.handle_vote_response(2, 3, true, &current_term, &role, peers.len());
+    let became_leader = election.handle_vote_response(2, 3, true, &current_term, &role, &config);
 
     assert!(!became_leader, "Should stay candidate without majority");
     assert_eq!(role, NodeState::Candidate);
@@ -422,6 +425,7 @@ fn test_liveness_handle_vote_rejection() {
 
     let mut peers = InMemoryNodeCollection::new();
     peers.push(2).unwrap();
+    let config = Configuration::new(peers.clone());
 
     // Receive rejection
     let became_leader = election.handle_vote_response(
@@ -430,7 +434,7 @@ fn test_liveness_handle_vote_rejection() {
         false, // vote_granted = false
         &current_term,
         &role,
-        peers.len(),
+        &config,
     );
 
     assert!(!became_leader);
@@ -454,6 +458,7 @@ fn test_safety_ignore_stale_vote_response() {
 
     let mut peers = InMemoryNodeCollection::new();
     peers.push(2).unwrap();
+    let config = Configuration::new(peers.clone());
 
     // Receive vote from old term
     let became_leader = election.handle_vote_response(
@@ -462,7 +467,7 @@ fn test_safety_ignore_stale_vote_response() {
         true,
         &current_term,
         &role,
-        peers.len(),
+        &config,
     );
 
     assert!(!became_leader, "Should ignore stale vote");
@@ -484,6 +489,7 @@ fn test_safety_step_down_on_higher_term_in_response() {
     );
 
     let peers = InMemoryNodeCollection::new();
+    let config = Configuration::new(peers.clone());
 
     // Simulate what RaftNode does: detect higher term and step down before processing
     let response_term = 10;
@@ -493,7 +499,7 @@ fn test_safety_step_down_on_higher_term_in_response() {
     }
 
     // Now call handle_vote_response (but since we're follower now, it won't do anything)
-    election.handle_vote_response(2, response_term, false, &current_term, &role, peers.len());
+    election.handle_vote_response(2, response_term, false, &current_term, &role, &config);
 
     assert_eq!(current_term, 10);
     assert_eq!(role, NodeState::Follower, "Should step down on higher term");
@@ -523,14 +529,14 @@ fn test_liveness_majority_calculation_even_cluster() {
     peers.push(2).unwrap();
     peers.push(3).unwrap();
     peers.push(4).unwrap();
+    let config = Configuration::new(peers.clone());
 
     // Get 1 vote (self + 1 = 2/4) - not enough
-    election.handle_vote_response(2, 2, true, &current_term, &role, peers.len());
+    election.handle_vote_response(2, 2, true, &current_term, &role, &config);
     assert_eq!(role, NodeState::Candidate);
 
     // Get 2nd vote (self + 2 = 3/4) - should become leader
-    let became_leader =
-        election.handle_vote_response(3, 2, true, &current_term, &role, peers.len());
+    let became_leader = election.handle_vote_response(3, 2, true, &current_term, &role, &config);
     if became_leader {
         role = NodeState::Leader;
     }
@@ -555,6 +561,7 @@ fn test_liveness_single_node_cluster() {
 
     // Single-node cluster (0 peers)
     let peers = InMemoryNodeCollection::new();
+    let config = Configuration::new(peers.clone());
 
     // In a single-node cluster, the node should immediately have majority
     // after voting for itself (1 vote out of 1 total nodes)
@@ -565,7 +572,7 @@ fn test_liveness_single_node_cluster() {
         true,
         &current_term,
         &role,
-        peers.len(), // 0 peers means cluster of 1
+        &config,
     );
 
     if became_leader {

@@ -4,6 +4,7 @@
 
 use crate::{
     chunk_collection::ChunkCollection,
+    configuration::Configuration,
     log_entry_collection::LogEntryCollection,
     node_collection::NodeCollection,
     node_state::NodeState,
@@ -104,11 +105,11 @@ where
     }
 
     /// Handle pre-vote response - returns true if we should start real election
-    pub fn handle_pre_vote_response(
+    pub fn handle_pre_vote_response<NC: NodeCollection>(
         &mut self,
         from: NodeId,
         vote_granted: bool,
-        total_peers: usize,
+        config: &Configuration<NC>,
     ) -> bool {
         if !self.in_pre_vote || !vote_granted {
             return false;
@@ -116,11 +117,10 @@ where
 
         self.pre_votes_received.push(from).ok();
 
-        let total_nodes = total_peers + 1;
         let pre_votes = self.pre_votes_received.len();
 
         // Won pre-vote if majority granted
-        if pre_votes > total_nodes / 2 {
+        if config.has_quorum(pre_votes) {
             self.in_pre_vote = false;
             true // Start real election
         } else {
@@ -208,14 +208,14 @@ where
     }
 
     /// Handle vote response - returns true if we should become leader
-    pub fn handle_vote_response(
+    pub fn handle_vote_response<NC: NodeCollection>(
         &mut self,
         from: NodeId,
         term: Term,
         vote_granted: bool,
         current_term: &Term,
         role: &NodeState,
-        total_peers: usize,
+        config: &Configuration<NC>,
     ) -> bool {
         if term > *current_term {
             return false; // Caller should step down
@@ -227,10 +227,9 @@ where
 
         self.votes_received.push(from).ok();
 
-        let total_nodes = total_peers + 1;
         let votes = self.votes_received.len();
 
-        votes > total_nodes / 2 // Won election if majority
+        config.has_quorum(votes) // Won election if majority
     }
 
     /// Check if candidate's log is at least as up-to-date as ours

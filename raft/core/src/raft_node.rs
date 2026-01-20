@@ -4,6 +4,7 @@
 
 use crate::{
     chunk_collection::ChunkCollection,
+    configuration::Configuration,
     election_manager::ElectionManager,
     event::Event,
     log_entry::LogEntry,
@@ -35,7 +36,7 @@ where
     O: Observer<Payload = P, LogEntries = L, ChunkCollection = CC>,
 {
     id: NodeId,
-    peers: C,
+    config: Configuration<C>,
     role: NodeState,
     current_term: Term,
     transport: T,
@@ -109,7 +110,7 @@ where
 
         RaftNode {
             id,
-            peers,
+            config: Configuration::new(peers),
             role: NodeState::Follower,
             current_term,
             transport,
@@ -151,10 +152,10 @@ where
     }
 
     pub fn peers(&self) -> Option<&C> {
-        if self.peers.is_empty() {
+        if self.config.members.is_empty() {
             None
         } else {
-            Some(&self.peers)
+            Some(&self.config.members)
         }
     }
 
@@ -278,7 +279,7 @@ where
                     self.start_pre_vote();
 
                     // If we have no peers, immediately start real election (we're the only node)
-                    if self.peers.len() == 0 {
+                    if self.config.members.len() == 0 {
                         self.start_election();
                     }
                 }
@@ -334,10 +335,9 @@ where
                     return;
                 }
 
-                let total_peers = self.peers.len();
                 let should_start_election =
                     self.election
-                        .handle_pre_vote_response(from, vote_granted, total_peers);
+                        .handle_pre_vote_response(from, vote_granted, &self.config);
 
                 if should_start_election {
                     self.observer.pre_vote_succeeded(self.id, self.current_term);
@@ -369,14 +369,13 @@ where
                     return;
                 }
 
-                let total_peers = self.peers.len();
                 let should_become_leader = self.election.handle_vote_response(
                     from,
                     term,
                     vote_granted,
                     &self.current_term,
                     &self.role,
-                    total_peers,
+                    &self.config,
                 );
 
                 if should_become_leader {
@@ -428,6 +427,7 @@ where
                         match_index,
                         &self.storage,
                         &mut self.state_machine,
+                        &self.config,
                     );
                     let new_commit_index = self.replication.commit_index();
                     if new_commit_index > old_commit_index {
@@ -508,9 +508,12 @@ where
         let index = self.storage.last_log_index();
 
         // If we are a single node cluster, we can advance commit index immediately
-        if self.peers.len() == 0 {
-            self.replication
-                .advance_commit_index(&self.storage, &mut self.state_machine);
+        if self.config.members.len() == 0 {
+            self.replication.advance_commit_index(
+                &self.storage,
+                &mut self.state_machine,
+                &self.config,
+            );
         }
 
         self.send_append_entries_to_followers();
@@ -554,7 +557,7 @@ where
         self.broadcast(vote_request);
 
         // If we have no peers, we already have majority (1 of 1) - become leader immediately
-        if self.peers.len() == 0 {
+        if self.config.members.len() == 0 {
             self.become_leader();
         }
     }
@@ -569,7 +572,7 @@ where
 
         // Initialize replication state
         self.replication
-            .initialize_leader_state(self.peers.iter(), &self.storage);
+            .initialize_leader_state(self.config.members.iter(), &self.storage);
 
         self.election.timer_service_mut().stop_timers();
         self.election.timer_service_mut().reset_heartbeat_timer();
@@ -607,7 +610,7 @@ where
     fn broadcast(&mut self, msg: RaftMsg<P, L, CC>) {
         // Collect peer IDs first to avoid borrowing issues
         let mut ids = C::new();
-        for peer in self.peers.iter() {
+        for peer in self.config.members.iter() {
             ids.push(peer).ok();
         }
 
@@ -625,7 +628,7 @@ where
     fn send_append_entries_to_followers(&mut self) {
         // Collect peer IDs first to avoid borrowing issues
         let mut ids = C::new();
-        for peer in self.peers.iter() {
+        for peer in self.config.members.iter() {
             ids.push(peer).ok();
         }
 

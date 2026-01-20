@@ -4,9 +4,11 @@
 
 use crate::{
     chunk_collection::ChunkCollection,
+    configuration::Configuration,
     log_entry::EntryType,
     log_entry_collection::LogEntryCollection,
     map_collection::MapCollection,
+    node_collection::NodeCollection,
     node_state::NodeState,
     raft_messages::RaftMsg,
     snapshot::SnapshotBuilder,
@@ -189,16 +191,18 @@ where
     }
 
     /// Handle AppendEntries response from follower
-    pub fn handle_append_entries_response<P, L, S, SM>(
+    pub fn handle_append_entries_response<P, L, S, SM, C>(
         &mut self,
         from: NodeId,
         success: bool,
         match_index: LogIndex,
         storage: &S,
         state_machine: &mut SM,
+        config: &Configuration<C>,
     ) where
         S: Storage<Payload = P, LogEntryCollection = L>,
         SM: StateMachine<Payload = P>,
+        C: NodeCollection,
     {
         if success {
             // Only update if match_index actually advanced
@@ -206,7 +210,7 @@ where
             if match_index > current_match {
                 self.match_index.insert(from, match_index);
                 self.next_index.insert(from, match_index + 1);
-                self.advance_commit_index(storage, state_machine);
+                self.advance_commit_index(storage, state_machine, config);
             }
         } else {
             // Decrement next_index on failure
@@ -299,15 +303,19 @@ where
         }
     }
 
-    pub fn advance_commit_index<P, L, S, SM>(&mut self, storage: &S, state_machine: &mut SM)
-    where
+    pub fn advance_commit_index<P, L, S, SM, C>(
+        &mut self,
+        storage: &S,
+        state_machine: &mut SM,
+        config: &Configuration<C>,
+    ) where
         S: Storage<Payload = P, LogEntryCollection = L>,
         SM: StateMachine<Payload = P>,
+        C: NodeCollection,
     {
         let leader_index = storage.last_log_index();
-        let total_peers = self.match_index.len();
 
-        if let Some(new_commit) = self.match_index.compute_median(leader_index, total_peers) {
+        if let Some(new_commit) = self.match_index.compute_median(leader_index, config) {
             if new_commit > self.commit_index {
                 if let Some(entry) = storage.get_entry(new_commit) {
                     if entry.term == storage.current_term() {

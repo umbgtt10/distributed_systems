@@ -3,7 +3,9 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use heapless::index_map::FnvIndexMap;
+use raft_core::configuration::Configuration;
 use raft_core::map_collection::MapCollection;
+use raft_core::node_collection::NodeCollection;
 use raft_core::types::{LogIndex, NodeId};
 
 #[derive(Debug, Clone)]
@@ -42,7 +44,11 @@ impl MapCollection for EmbassyMapCollection {
         self.map.clear();
     }
 
-    fn compute_median(&self, leader_last_index: LogIndex, total_peers: usize) -> Option<LogIndex> {
+    fn compute_median<C: NodeCollection>(
+        &self,
+        leader_last_index: LogIndex,
+        config: &Configuration<C>,
+    ) -> Option<LogIndex> {
         if self.is_empty() {
             return None;
         }
@@ -60,7 +66,7 @@ impl MapCollection for EmbassyMapCollection {
 
         indices.sort_unstable();
 
-        let quorum_size = (total_peers / 2) + 1;
+        let quorum_size = config.quorum_size();
         if indices.len() >= quorum_size {
             Some(indices[indices.len() - quorum_size])
         } else {
