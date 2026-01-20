@@ -47,27 +47,34 @@ This repository is intentionally structured to separate **algorithmic correctnes
 ## Project Structure
 
 ```
-raft-core/            # no_std Raft algorithm (frozen logic)
-raft-sim/             # std-based deterministic simulator & test harness
-raft-runtime-embassy/ # no_std + Embassy realization (embedded target)
-raft-runtime-std/     # std + Tokio + networking (cloud runtime)
-raft-deploy-aws/      # Docker, Kubernetes, Helm, observability
+raft/
+  core/               # no_std Raft algorithm (frozen logic)
+  sim/                # std-based deterministic simulator & test harness
+  embassy-sim/        # no_std + Embassy realization (embedded target)
+  docs/               # Architecture Decision Records and implementation plans
 ```
 
-### `raft-core`
+**Note**: Production runtime (Tokio) and deployment infrastructure (AWS/Kubernetes) are planned for future phases.
+
+### `raft/core`
 
 * `#![no_std]` (optionally `alloc`)
 * Implements:
 
-  * Leader election
+  * Leader election (with Pre-Vote Protocol)
   * Log replication
+  * Log compaction & snapshots
   * Commit rules
   * State transitions
+  * Crash recovery
 * Exposes abstract traits for:
 
   * Transport
-  * Clock
+  * TimerService
   * Storage
+  * StateMachine
+  * Observer (for instrumentation)
+  * Collection abstractions (NodeCollection, MapCollection, etc.)
 
 This crate is **never allowed** to depend on:
 
@@ -110,7 +117,7 @@ Exit criteria (all met):
 * ✅ Correct recovery after crash with snapshot
 * ✅ Memory bounded even with high write load
 
-**Status**: Complete. 100 tests passing. Validated in simulation and Embassy-sim.
+**Status**: Complete. 110+ tests passing across 28 test files. Validated in simulation and Embassy-sim.
 
 ---
 
@@ -153,29 +160,41 @@ In standard Raft, when a node's election timer fires, it immediately:
 
 ### Phase 1 — Simulation & Proof ✅
 
-* Deterministic cluster simulator
+* Deterministic cluster simulator (`raft-sim`)
+* Two test modes:
+  * **Timeless**: Fully deterministic, no wall-clock time, total message control
+  * **Timefull**: Wall-clock based, randomized timeouts, realistic timing
 * Simulated network with:
-
   * partitions
   * message drops
   * reordering
-  * latency
+  * latency simulation
 * Crash / restart modeling
+* 110+ integration tests covering:
+  * Basic leader election
+  * Log replication and commit
+  * Network partitions and healing
+  * Pre-vote protocol
+  * Snapshot creation and transfer
+  * Crash recovery with snapshots
+  * Conflict resolution
+  * State machine safety
 
 Purpose:
 
 * Produce **evidence of correctness** via integration-level tests
-* Tokio may be used **only as a dev dependency**
+* All tests pass deterministically in both modes
 
 ---
 
-### Phase 2 — `no_std + Embassy`
+### Phase 2 — `no_std + Embassy` ✅
 
-* Embedded-compatible realization
-* Small, static clusters (5–7 nodes)
+* Embedded-compatible realization (`raft-embassy-sim`)
+* Small, static clusters (3-5 nodes)
 * Embassy executor and timers
-* In-memory or flash-backed storage
-* Fixed-capacity buffers
+* UDP transport over simulated network
+* In-memory storage with fixed-capacity buffers
+* Postcard serialization (no_std compatible)
 
 Purpose:
 
@@ -183,11 +202,13 @@ Purpose:
 * Demonstrate near bare-metal execution
 * Prove portability without logic changes
 
+**Status**: Complete. Validated with UDP transport in Embassy runtime. Same Raft core logic runs unchanged in both simulation and Embassy environments.
+
 ---
 
 ### Phase 3 — Raft Advanced Features (Planned)
 
-* Dynamic membership changes
+* Dynamic membership changes (implementation plan complete)
 * Read-only query optimization
 * Leadership transfer
 
@@ -197,7 +218,7 @@ Purpose:
 * Safe reconfiguration without downtime
 * Performance optimizations for read-heavy workloads
 
-**Note**: Log compaction and Pre-Vote Protocol already complete (see above).
+**Note**: Log compaction and Pre-Vote Protocol already complete (see above). Dynamic membership implementation plan documented in [docs/DYNAMIC_MEMBERSHIP_IMPLEMENTATION_PLAN.md](docs/DYNAMIC_MEMBERSHIP_IMPLEMENTATION_PLAN.md).
 
 ---
 
@@ -240,7 +261,10 @@ The test harness is treated as a **formal contract**.
 
 ### Algorithmic Features (To Be Implemented)
 
-- 🔲 **Dynamic Membership**: Adding/removing nodes from the cluster (Joint Consensus or Single-Server Changes)
+- 🔲 **Dynamic Membership**: Adding/removing nodes from the cluster
+  - Implementation plan: [docs/DYNAMIC_MEMBERSHIP_IMPLEMENTATION_PLAN.md](docs/DYNAMIC_MEMBERSHIP_IMPLEMENTATION_PLAN.md)
+  - Strategy: Single-Server Changes first (Weeks 1-3), then Joint Consensus upgrade (Weeks 4-5)
+  - Estimated: 50-65 hours over 5 weeks
 - 🔲 **Read-Only Queries**: Linearizable reads without log entries (leader leases)
 - 🔲 **Leadership Transfer**: Graceful handoff for maintenance
 
@@ -296,16 +320,24 @@ This project exists to demonstrate:
 ### Phase Progress
 
 - ✅ **Phase 0 — Raft Core**: Complete (Leader election, log replication, commit rules)
-- ✅ **Phase 1 — Simulation & Proof**: Complete (raft-sim with deterministic test harness)
-- ✅ **Phase 2 — `no_std + Embassy`**: Complete (Embassy-sim with UDP transport)
-  - Leader election with randomized timeouts
-  - Log replication with quorum tracking
-  - Client request handling with transparent forwarding
-  - Commit-based acknowledgments
-- 🔲 **Phase 3 — Raft Advanced Features**: Planned (log compaction, dynamic membership, etc.)
-- 🔲 **Phase 4 — Cloud-Native (AWS)**: Planned
-
-**Note**: Phase 2 was completed before Phase 1 to validate the abstraction boundaries work in the most constrained environment first.
+- ✅ **Phase 1 — Simulation & Proof**: Complete (110+ tests passing)
+  - Deterministic test harness (timeless mode)
+  - Wall-clock test harness (timefull mode)
+  - Comprehensive coverage: elections, replication, snapshots, partitions, recovery
+- ✅ **Phase 1.5 — Log Compaction**: Complete (merged to main)
+  - Automatic snapshot creation at threshold
+  - InstallSnapshot RPC for lagging followers
+  - Crash recovery with snapshot restoration
+  - Log truncation after snapshot
+- ✅ **Phase 2 — `no_std + Embassy`**: Complete
+  - Embassy-sim with UDP transport validated
+  - Same core logic runs in both simulation and Embassy
+  - Abstraction boundaries proven in most constrained environment
+- 🔲 **Phase 3 — Raft Advanced Features**: Planned
+  - Dynamic membership (implementation plan complete)
+  - Read-only queries
+  - Leadership transfer
+- 🔲 **Phase 4 — Cloud-Native (AWS)**: Planned (Tokio runtime, gRPC, Kubernetes deployment)
 
 ---
 
