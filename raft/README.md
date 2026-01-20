@@ -236,13 +236,33 @@ The test harness is treated as a **formal contract**.
 
 ---
 
-## Advanced Raft Features (To Be Implemented)
+## TODO: Advanced Raft Features & Documentation
 
-The current implementation covers the core Raft protocol. The following advanced features remain to be implemented:
+### Algorithmic Features (To Be Implemented)
 
-- 🔲 **Dynamic Membership**: Adding/removing nodes from the cluster
-- 🔲 **Read-Only Queries**: Linearizable reads without log entries
+- 🔲 **Dynamic Membership**: Adding/removing nodes from the cluster (Joint Consensus or Single-Server Changes)
+- 🔲 **Read-Only Queries**: Linearizable reads without log entries (leader leases)
 - 🔲 **Leadership Transfer**: Graceful handoff for maintenance
+
+### Architectural Decision Records (To Be Documented)
+
+#### High Priority
+- 🔲 **ADR-R11: Storage Durability Guarantees** - Fsync policy, WAL vs direct writes, durability/throughput tradeoffs
+- 🔲 **ADR-R13: Transport Abstraction Design** - Why async-agnostic, message delivery guarantees, timeout handling
+- 🔲 **ADR-R14: Error Propagation Strategy** - Panic vs Result, storage failure handling, network retry policies
+- 🔲 **ADR-R16: Configuration Management** - Static vs dynamic config, election timeout tuning, snapshot threshold policy
+- 🔲 **ADR-R19: Security Boundary Definition** - Trusted network assumption, TLS/auth in runtime layer, no BFT
+
+#### Medium Priority
+- 🔲 **ADR-R9: Observer Pattern for Instrumentation** - Trait-based observers, observable events, separation of concerns
+- 🔲 **ADR-R10: Zero-Cost Abstractions for Telemetry** - Zero-overhead observability in `no_std`, Prometheus integration
+- 🔲 **ADR-R12: Serialization Strategy** - Wire format choice, backward compatibility, schema evolution
+- 🔲 **ADR-R17: Multi-Environment Realization Strategy** - Why Embassy sim exists, path to production, adapter responsibilities
+
+#### Lower Priority
+- 🔲 **ADR-R15: Deterministic Testing Philosophy** - Imperative vs property-based tests, chaos testing, soak tests
+- 🔲 **ADR-R18: Memory Bounds & Resource Limits** - Max log size, message size limits, connection limits
+- 🔲 **ADR-R20: Client Request Semantics** - Submit returns index not result, NotLeader retries, linearizability guarantees
 
 ---
 
