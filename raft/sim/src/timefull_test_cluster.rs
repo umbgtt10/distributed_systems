@@ -6,6 +6,7 @@ use crate::mocked_timer_service::{MockClock, MockTimerService};
 use crate::null_observer::NullObserver;
 use crate::{
     in_memory_chunk_collection::InMemoryChunkCollection,
+    in_memory_config_change_collection::InMemoryConfigChangeCollection,
     in_memory_log_entry_collection::InMemoryLogEntryCollection,
     in_memory_map_collection::InMemoryMapCollection,
     in_memory_node_collection::InMemoryNodeCollection,
@@ -31,6 +32,7 @@ type InMemoryTimefullRaftNode = RaftNode<
     InMemoryMapCollection,
     MockTimerService,
     NullObserver<String, InMemoryLogEntryCollection>,
+    InMemoryConfigChangeCollection,
 >;
 
 pub struct TimefullTestCluster {

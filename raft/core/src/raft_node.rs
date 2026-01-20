@@ -4,6 +4,7 @@
 
 use crate::{
     chunk_collection::ChunkCollection,
+    config_change_collection::ConfigChangeCollection,
     configuration::Configuration,
     election_manager::ElectionManager,
     event::Event,
@@ -22,7 +23,7 @@ use crate::{
     types::{LogIndex, NodeId, Term},
 };
 
-pub struct RaftNode<T, S, P, SM, C, L, CC, M, TS, O>
+pub struct RaftNode<T, S, P, SM, C, L, CC, M, TS, O, CCC>
 where
     P: Clone,
     T: Transport<Payload = P, LogEntries = L, ChunkCollection = CC>,
@@ -34,6 +35,7 @@ where
     M: MapCollection,
     TS: TimerService,
     O: Observer<Payload = P, LogEntries = L, ChunkCollection = CC>,
+    CCC: ConfigChangeCollection,
 {
     id: NodeId,
     config: Configuration<C>,
@@ -48,6 +50,8 @@ where
     // Delegated responsibilities
     election: ElectionManager<C, TS>,
     replication: LogReplicationManager<M>,
+
+    _phantom: core::marker::PhantomData<CCC>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,7 +59,7 @@ pub enum ClientError {
     NotLeader,
 }
 
-impl<T, S, P, SM, C, L, CC, M, TS, O> RaftNode<T, S, P, SM, C, L, CC, M, TS, O>
+impl<T, S, P, SM, C, L, CC, M, TS, O, CCC> RaftNode<T, S, P, SM, C, L, CC, M, TS, O, CCC>
 where
     P: Clone,
     T: Transport<Payload = P, LogEntries = L, ChunkCollection = CC>,
@@ -67,6 +71,7 @@ where
     M: MapCollection,
     TS: TimerService,
     O: Observer<Payload = P, LogEntries = L, ChunkCollection = CC>,
+    CCC: ConfigChangeCollection,
 {
     /// Internal constructor - use RaftNodeBuilder instead
     #[allow(clippy::too_many_arguments)]
@@ -120,6 +125,7 @@ where
             snapshot_threshold,
             election,
             replication,
+            _phantom: core::marker::PhantomData,
         }
     }
 
@@ -260,6 +266,9 @@ where
             Event::Message { from, msg } => self.handle_message(from, msg),
             Event::ClientCommand(payload) => {
                 let _ = self.submit_client_command(payload);
+            }
+            Event::ConfigChange(change) => {
+                let _ = self.submit_config_change(change);
             }
         }
     }
@@ -421,7 +430,7 @@ where
 
                 if self.role == NodeState::Leader && term == self.current_term {
                     let old_commit_index = self.replication.commit_index();
-                    self.replication.handle_append_entries_response(
+                    let config_changes: CCC = self.replication.handle_append_entries_response(
                         from,
                         success,
                         match_index,
@@ -433,6 +442,9 @@ where
                     if new_commit_index > old_commit_index {
                         self.observer
                             .commit_advanced(self.id, old_commit_index, new_commit_index);
+
+                        // Apply any configuration changes
+                        self.apply_config_changes(config_changes);
 
                         // Check if we should create a snapshot after commit advances
                         if self.should_create_snapshot() {
@@ -509,11 +521,46 @@ where
 
         // If we are a single node cluster, we can advance commit index immediately
         if self.config.members.len() == 0 {
-            self.replication.advance_commit_index(
+            let config_changes: CCC = self.replication.advance_commit_index(
                 &self.storage,
                 &mut self.state_machine,
                 &self.config,
             );
+            self.apply_config_changes(config_changes);
+        }
+
+        self.send_append_entries_to_followers();
+
+        Ok(index)
+    }
+
+    pub fn submit_config_change(
+        &mut self,
+        change: crate::log_entry::ConfigurationChange,
+    ) -> Result<LogIndex, ClientError>
+    where
+        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
+        S: Storage<Payload = P, LogEntryCollection = L>,
+    {
+        if self.role != NodeState::Leader {
+            return Err(ClientError::NotLeader);
+        }
+
+        let entry = LogEntry {
+            term: self.current_term,
+            entry_type: crate::log_entry::EntryType::ConfigChange(change),
+        };
+        self.storage.append_entries(&[entry]);
+        let index = self.storage.last_log_index();
+
+        // If we are a single node cluster, we can advance commit index immediately
+        if self.config.members.len() == 0 {
+            let config_changes: CCC = self.replication.advance_commit_index(
+                &self.storage,
+                &mut self.state_machine,
+                &self.config,
+            );
+            self.apply_config_changes(config_changes);
         }
 
         self.send_append_entries_to_followers();
@@ -523,6 +570,73 @@ where
 
     pub fn is_committed(&self, index: LogIndex) -> bool {
         index <= self.replication.commit_index()
+    }
+
+    /// Apply configuration changes that have been committed
+    fn apply_config_changes(&mut self, changes: CCC)
+    where
+        C: NodeCollection,
+        M: MapCollection,
+        CCC: ConfigChangeCollection,
+    {
+        use crate::log_entry::ConfigurationChange;
+
+        for (_index, change) in changes.iter() {
+            match change {
+                ConfigurationChange::AddServer(node_id) => {
+                    self.observer
+                        .configuration_change_applied(self.id, *node_id, true);
+
+                    // Add to configuration
+                    let mut new_members = C::new();
+                    for existing_id in self.config.members.iter() {
+                        let _ = new_members.push(existing_id);
+                    }
+                    let _ = new_members.push(*node_id);
+                    self.config = Configuration::new(new_members);
+
+                    // Initialize replication state for new member if we're leader
+                    if self.role == NodeState::Leader {
+                        let next_index = self.storage.last_log_index() + 1;
+                        self.replication
+                            .next_index_mut()
+                            .insert(*node_id, next_index);
+                        self.replication.match_index_mut().insert(*node_id, 0);
+                    }
+                }
+                ConfigurationChange::RemoveServer(node_id) => {
+                    self.observer
+                        .configuration_change_applied(self.id, *node_id, false);
+
+                    // Remove from configuration
+                    let mut new_members = C::new();
+                    for existing_id in self.config.members.iter() {
+                        if existing_id != *node_id {
+                            let _ = new_members.push(existing_id);
+                        }
+                    }
+                    self.config = Configuration::new(new_members);
+
+                    // Clean up replication state if we're leader
+                    if self.role == NodeState::Leader {
+                        self.replication.next_index_mut().remove(*node_id);
+                        self.replication.match_index_mut().remove(*node_id);
+                    }
+
+                    // If we removed ourselves, step down
+                    if *node_id == self.id {
+                        let old_role = self.node_state_to_role();
+                        self.role = NodeState::Follower;
+                        self.observer.role_changed(
+                            self.id,
+                            old_role,
+                            Role::Follower,
+                            self.current_term,
+                        );
+                    }
+                }
+            }
+        }
     }
 
     // ============================================================

@@ -25,6 +25,10 @@ impl MapCollection for InMemoryMapCollection {
         self.map.get(&key).cloned()
     }
 
+    fn remove(&mut self, key: NodeId) {
+        self.map.swap_remove(&key);
+    }
+
     fn len(&self) -> usize {
         self.map.len()
     }

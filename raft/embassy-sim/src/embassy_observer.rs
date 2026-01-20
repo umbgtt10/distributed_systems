@@ -268,4 +268,11 @@ impl<P: Clone, L: LogEntryCollection<Payload = P> + Clone> Observer for EmbassyO
             );
         }
     }
+
+    fn configuration_change_applied(&mut self, node: NodeId, target: NodeId, added: bool) {
+        if self.level >= EventLevel::Info {
+            let action = if added { "added" } else { "removed" };
+            info!("Node {} config change: {} {}", node, target, action);
+        }
+    }
 }

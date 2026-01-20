@@ -3,16 +3,14 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    chunk_collection::ChunkCollection, log_entry_collection::LogEntryCollection,
-    raft_messages::RaftMsg, timer_service::TimerKind, types::NodeId,
+    chunk_collection::ChunkCollection, log_entry::ConfigurationChange,
+    log_entry_collection::LogEntryCollection, raft_messages::RaftMsg, timer_service::TimerKind,
+    types::NodeId,
 };
 
-pub enum Event<
-    P: Clone,
-    L: LogEntryCollection<Payload = P> + Clone,
-    C: ChunkCollection + Clone,
-> {
+pub enum Event<P: Clone, L: LogEntryCollection<Payload = P> + Clone, C: ChunkCollection + Clone> {
     Message { from: NodeId, msg: RaftMsg<P, L, C> },
     TimerFired(TimerKind),
     ClientCommand(P),
+    ConfigChange(ConfigurationChange),
 }

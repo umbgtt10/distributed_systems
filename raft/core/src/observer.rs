@@ -213,4 +213,7 @@ pub trait Observer {
         new_term: Term,
         from_peer: NodeId,
     );
+
+    /// Configuration change applied (AddServer or RemoveServer)
+    fn configuration_change_applied(&mut self, node: NodeId, target: NodeId, added: bool);
 }

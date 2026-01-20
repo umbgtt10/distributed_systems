@@ -40,6 +40,10 @@ impl NodeCollection for InMemoryNodeCollection {
         Ok(())
     }
 
+    fn remove(&mut self, id: NodeId) {
+        self.nodes.retain(|&node_id| node_id != id);
+    }
+
     fn len(&self) -> usize {
         self.nodes.len()
     }

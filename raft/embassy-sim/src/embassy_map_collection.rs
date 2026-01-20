@@ -28,6 +28,10 @@ impl MapCollection for EmbassyMapCollection {
         self.map.get(&key).copied()
     }
 
+    fn remove(&mut self, key: NodeId) {
+        self.map.remove(&key);
+    }
+
     fn len(&self) -> usize {
         self.map.len()
     }

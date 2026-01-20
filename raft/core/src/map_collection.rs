@@ -10,6 +10,7 @@ pub trait MapCollection {
     fn new() -> Self;
     fn insert(&mut self, key: NodeId, value: LogIndex);
     fn get(&self, key: NodeId) -> Option<LogIndex>;
+    fn remove(&mut self, key: NodeId);
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;
     fn values(&self) -> impl Iterator<Item = LogIndex> + '_;

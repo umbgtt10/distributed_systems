@@ -17,6 +17,7 @@ use raft_core::{
 };
 use raft_sim::{
     in_memory_chunk_collection::InMemoryChunkCollection,
+    in_memory_config_change_collection::InMemoryConfigChangeCollection,
     in_memory_log_entry_collection::InMemoryLogEntryCollection,
     in_memory_map_collection::InMemoryMapCollection,
     in_memory_node_collection::InMemoryNodeCollection,
@@ -354,14 +355,15 @@ fn test_liveness_update_next_index_on_success() {
     let mut state_machine = InMemoryStateMachine::new();
 
     // Node 2 successfully replicated up to index 3
-    replication.handle_append_entries_response(
-        2,    // from
-        true, // success
-        3,    // match_index
-        &storage,
-        &mut state_machine,
-        &config,
-    );
+    let _config_changes: InMemoryConfigChangeCollection = replication
+        .handle_append_entries_response(
+            2,    // from
+            true, // success
+            3,    // match_index
+            &storage,
+            &mut state_machine,
+            &config,
+        );
 
     assert_eq!(
         replication.next_index().get(2),
@@ -395,14 +397,15 @@ fn test_liveness_decrement_next_index_on_failure() {
     let mut state_machine = InMemoryStateMachine::new();
 
     // Node 2 rejects (log inconsistency)
-    replication.handle_append_entries_response(
-        2,
-        false, // failure
-        0,
-        &storage,
-        &mut state_machine,
-        &config,
-    );
+    let _config_changes: InMemoryConfigChangeCollection = replication
+        .handle_append_entries_response(
+            2,
+            false, // failure
+            0,
+            &storage,
+            &mut state_machine,
+            &config,
+        );
 
     assert_eq!(
         replication.next_index().get(2),
@@ -454,10 +457,12 @@ fn test_liveness_commit_index_advancement_on_majority() {
 
     // Leader (self) has all 5 entries
     // Node 2 confirms up to index 3
-    replication.handle_append_entries_response(2, true, 3, &storage, &mut state_machine, &config);
+    let _config_changes: InMemoryConfigChangeCollection = replication
+        .handle_append_entries_response(2, true, 3, &storage, &mut state_machine, &config);
 
     // Node 3 confirms up to index 3
-    replication.handle_append_entries_response(3, true, 3, &storage, &mut state_machine, &config);
+    let _config_changes: InMemoryConfigChangeCollection = replication
+        .handle_append_entries_response(3, true, 3, &storage, &mut state_machine, &config);
 
     // Now 3 out of 5 nodes (including leader) have entries up to index 3
     // Should advance commit_index to 3
@@ -468,7 +473,8 @@ fn test_liveness_commit_index_advancement_on_majority() {
     );
 
     // Node 4 confirms up to index 5
-    replication.handle_append_entries_response(4, true, 5, &storage, &mut state_machine, &config);
+    let _config_changes: InMemoryConfigChangeCollection = replication
+        .handle_append_entries_response(4, true, 5, &storage, &mut state_machine, &config);
 
     // Now 3 out of 5 have up to index 5 (leader, node 4, and we need one more)
     // commit_index should still be 3
@@ -479,7 +485,8 @@ fn test_liveness_commit_index_advancement_on_majority() {
     );
 
     // Node 5 confirms up to index 4
-    replication.handle_append_entries_response(5, true, 4, &storage, &mut state_machine, &config);
+    let _config_changes: InMemoryConfigChangeCollection = replication
+        .handle_append_entries_response(5, true, 4, &storage, &mut state_machine, &config);
 
     // Now we have: leader(5), node2(3), node3(3), node4(5), node5(4)
     // Majority (3/5) at index 4: leader, node4, node5
@@ -522,15 +529,18 @@ fn test_safety_only_commit_current_term_entries() {
     let mut state_machine = InMemoryStateMachine::new();
 
     // Node 2 and 3 both have up to index 2 (old term entries)
-    replication.handle_append_entries_response(2, true, 2, &storage, &mut state_machine, &config);
-    replication.handle_append_entries_response(3, true, 2, &storage, &mut state_machine, &config);
+    let _config_changes: InMemoryConfigChangeCollection = replication
+        .handle_append_entries_response(2, true, 2, &storage, &mut state_machine, &config);
+    let _config_changes: InMemoryConfigChangeCollection = replication
+        .handle_append_entries_response(3, true, 2, &storage, &mut state_machine, &config);
 
     // Even though majority has index 2, we shouldn't commit old term entries directly
     // (Raft safety: only commit entries from current term via replication)
     // But actually, when we replicate index 3 and it gets majority, indexes 1 and 2 get committed too
 
     // Let's verify by replicating index 3
-    replication.handle_append_entries_response(2, true, 3, &storage, &mut state_machine, &config);
+    let _config_changes: InMemoryConfigChangeCollection = replication
+        .handle_append_entries_response(2, true, 3, &storage, &mut state_machine, &config);
 
     // Now majority has index 3 (current term), so commit_index should be 3
     assert_eq!(replication.commit_index(), 3);
@@ -559,14 +569,15 @@ fn test_safety_ignore_responses_from_old_term() {
     let mut state_machine = InMemoryStateMachine::new();
 
     // Response from node 2 with a really high match_index (should update)
-    replication.handle_append_entries_response(
-        2,
-        true,
-        5, // Very high match index
-        &storage,
-        &mut state_machine,
-        &config,
-    );
+    let _config_changes: InMemoryConfigChangeCollection = replication
+        .handle_append_entries_response(
+            2,
+            true,
+            5, // Very high match index
+            &storage,
+            &mut state_machine,
+            &config,
+        );
 
     // next_index and match_index should be updated (note: the API doesn't check term in response)
     // This test needs revision based on actual API behavior
@@ -747,7 +758,8 @@ fn test_liveness_three_node_cluster_majority() {
     let mut state_machine = InMemoryStateMachine::new();
 
     // Only node 2 confirms (1 follower + 1 leader = 2/3 = majority)
-    replication.handle_append_entries_response(2, true, 2, &storage, &mut state_machine, &config);
+    let _config_changes: InMemoryConfigChangeCollection = replication
+        .handle_append_entries_response(2, true, 2, &storage, &mut state_machine, &config);
 
     assert_eq!(
         replication.commit_index(),
@@ -813,7 +825,8 @@ fn test_liveness_get_append_entries_with_compacted_snapshot_point() {
 
     // Simulate that follower 2 confirmed up to index 10
     // This will set next_index[2] = 11 (one after the confirmed match)
-    replication.handle_append_entries_response(2, true, 10, &storage, &mut state_machine, &config);
+    let _config_changes: InMemoryConfigChangeCollection = replication
+        .handle_append_entries_response(2, true, 10, &storage, &mut state_machine, &config);
 
     // Now next_index[2] = 11, so prev_log_index will be 10
     let msg = replication.get_append_entries_for_follower::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage>(2, 3, &storage);
@@ -886,14 +899,8 @@ fn test_safety_get_append_entries_before_snapshot_point() {
     // Each rejection decrements next_index by 1
     for _ in 0..7 {
         // Decrement from 11 down to 4
-        replication.handle_append_entries_response(
-            2,
-            false,
-            0,
-            &storage,
-            &mut state_machine,
-            &config,
-        );
+        let _config_changes: InMemoryConfigChangeCollection = replication
+            .handle_append_entries_response(2, false, 0, &storage, &mut state_machine, &config);
     }
 
     let msg = replication.get_append_entries_for_follower::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage>(2, 3, &storage);
@@ -1363,7 +1370,7 @@ fn test_liveness_leader_detects_follower_needs_snapshot() {
     // Simulate follower failures to decrement next_index below first_log_index
     // Leader starts with next_index[0] = 21, needs to get it to < 11
     for _ in 0..15 {
-        replication.handle_append_entries_response::<String, InMemoryLogEntryCollection, InMemoryStorage, InMemoryStateMachine, InMemoryNodeCollection>(
+        let _config_changes: InMemoryConfigChangeCollection = replication.handle_append_entries_response::<String, InMemoryLogEntryCollection, InMemoryStorage, InMemoryStateMachine, InMemoryNodeCollection, InMemoryConfigChangeCollection>(
             0,     // peer
             false, // failure
             0,     // match_index (ignored on failure)

@@ -11,6 +11,7 @@ use embassy_time::Duration;
 
 use crate::cancellation_token::CancellationToken;
 use crate::cluster::{ClientRequest, ClusterError};
+use crate::embassy_config_change_collection::EmbassyConfigChangeCollection;
 use crate::embassy_log_collection::EmbassyLogEntryCollection;
 use crate::embassy_map_collection::EmbassyMapCollection;
 use crate::embassy_node_collection::EmbassyNodeCollection;
@@ -44,6 +45,7 @@ type EmbassyRaftNode = RaftNode<
     EmbassyMapCollection,
     EmbassyTimer,
     EmbassyObserver<String, EmbassyLogEntryCollection>,
+    EmbassyConfigChangeCollection,
 >;
 
 /// Embassy Raft node - encapsulates all node state and behavior

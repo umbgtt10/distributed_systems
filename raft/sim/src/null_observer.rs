@@ -94,6 +94,8 @@ where
     }
     #[inline]
     fn higher_term_discovered(&mut self, _: NodeId, _: Term, _: Term, _: NodeId) {}
+
+    fn configuration_change_applied(&mut self, _: NodeId, _: NodeId, _: bool) {}
 }
 
 impl<P, L> Default for NullObserver<P, L>

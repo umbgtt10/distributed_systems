@@ -4,6 +4,7 @@
 
 use crate::{
     in_memory_chunk_collection::InMemoryChunkCollection,
+    in_memory_config_change_collection::InMemoryConfigChangeCollection,
     in_memory_log_entry_collection::InMemoryLogEntryCollection,
     in_memory_map_collection::InMemoryMapCollection,
     in_memory_node_collection::InMemoryNodeCollection,
@@ -30,6 +31,7 @@ pub type TestNode = RaftNode<
     InMemoryMapCollection,
     DummyTimer,
     NullObserver<String, InMemoryLogEntryCollection>,
+    InMemoryConfigChangeCollection,
 >;
 
 pub struct TimelessTestCluster {

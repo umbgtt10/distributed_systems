@@ -3,19 +3,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    chunk_collection::ChunkCollection,
-    election_manager::ElectionManager,
-    log_entry_collection::LogEntryCollection,
-    log_replication_manager::LogReplicationManager,
-    map_collection::MapCollection,
-    node_collection::NodeCollection,
-    observer::Observer,
-    raft_node::RaftNode,
-    state_machine::StateMachine,
-    storage::Storage,
-    timer_service::TimerService,
-    transport::Transport,
-    types::{LogIndex, NodeId},
+    chunk_collection::ChunkCollection, config_change_collection::ConfigChangeCollection, election_manager::ElectionManager, log_entry_collection::LogEntryCollection, log_replication_manager::LogReplicationManager, map_collection::MapCollection, node_collection::NodeCollection, observer::Observer, raft_node::RaftNode, state_machine::StateMachine, storage::Storage, timer_service::TimerService, transport::Transport, types::{LogIndex, NodeId}
 };
 
 /// Builder for constructing a RaftNode with proper initialization order
@@ -147,17 +135,18 @@ where
     M: MapCollection,
 {
     /// Add transport, peers, and observer to complete construction
-    pub fn with_transport<T, L, CC, O>(
+    pub fn with_transport<T, L, CC, O, CCC>(
         self,
         transport: T,
         peers: C,
         observer: O,
-    ) -> RaftNode<T, S, P, SM, C, L, CC, M, TS, O>
+    ) -> RaftNode<T, S, P, SM, C, L, CC, M, TS, O, CCC>
     where
         P: Clone,
         T: Transport<Payload = P, LogEntries = L, ChunkCollection = CC>,
         L: LogEntryCollection<Payload = P> + Clone,
         CC: ChunkCollection + Clone,
+        CCC: ConfigChangeCollection,
         S: Storage<Payload = P, LogEntryCollection = L, SnapshotChunk = CC> + Clone,
         SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
         O: Observer<Payload = P, LogEntries = L, ChunkCollection = CC>,

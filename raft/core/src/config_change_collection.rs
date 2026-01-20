@@ -2,21 +2,22 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::types::NodeId;
+use crate::log_entry::ConfigurationChange;
+use crate::types::LogIndex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CollectionError {
     Full,
 }
 
-pub trait NodeCollection {
-    type Iter<'a>: Iterator<Item = NodeId>
+pub trait ConfigChangeCollection: Clone {
+    type Iter<'a>: Iterator<Item = (LogIndex, &'a ConfigurationChange)>
     where
         Self: 'a;
 
     fn new() -> Self;
-    fn push(&mut self, node_id: NodeId) -> Result<(), CollectionError>;
-    fn remove(&mut self, node_id: NodeId);
+    fn push(&mut self, index: LogIndex, change: ConfigurationChange)
+        -> Result<(), CollectionError>;
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0

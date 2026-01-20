@@ -22,6 +22,10 @@ impl NodeCollection for EmbassyNodeCollection {
         self.nodes.push(node_id).map_err(|_| CollectionError::Full)
     }
 
+    fn remove(&mut self, node_id: NodeId) {
+        self.nodes.retain(|&id| id != node_id);
+    }
+
     fn len(&self) -> usize {
         self.nodes.len()
     }

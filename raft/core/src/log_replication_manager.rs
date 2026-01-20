@@ -4,6 +4,7 @@
 
 use crate::{
     chunk_collection::ChunkCollection,
+    config_change_collection::ConfigChangeCollection,
     configuration::Configuration,
     log_entry::EntryType,
     log_entry_collection::LogEntryCollection,
@@ -191,7 +192,7 @@ where
     }
 
     /// Handle AppendEntries response from follower
-    pub fn handle_append_entries_response<P, L, S, SM, C>(
+    pub fn handle_append_entries_response<P, L, S, SM, C, CC>(
         &mut self,
         from: NodeId,
         success: bool,
@@ -199,10 +200,12 @@ where
         storage: &S,
         state_machine: &mut SM,
         config: &Configuration<C>,
-    ) where
+    ) -> CC
+    where
         S: Storage<Payload = P, LogEntryCollection = L>,
         SM: StateMachine<Payload = P>,
         C: NodeCollection,
+        CC: ConfigChangeCollection,
     {
         if success {
             // Only update if match_index actually advanced
@@ -210,7 +213,7 @@ where
             if match_index > current_match {
                 self.match_index.insert(from, match_index);
                 self.next_index.insert(from, match_index + 1);
-                self.advance_commit_index(storage, state_machine, config);
+                return self.advance_commit_index(storage, state_machine, config);
             }
         } else {
             // Decrement next_index on failure
@@ -219,6 +222,8 @@ where
                 self.next_index.insert(from, next - 1);
             }
         }
+
+        CC::new()
     }
 
     fn try_append_entries<P, L, S, SM>(
@@ -252,7 +257,7 @@ where
         // Update commit index
         if leader_commit > self.commit_index {
             self.commit_index = leader_commit.min(storage.last_log_index());
-            self.apply_committed_entries(storage, state_machine);
+            self.apply_committed_entries_on_follower(storage, state_machine);
         }
 
         true
@@ -287,31 +292,71 @@ where
         false
     }
 
-    fn apply_committed_entries<P, L, S, SM>(&mut self, storage: &S, state_machine: &mut SM)
-    where
+    /// Apply committed entries on follower (doesn't track config changes)
+    fn apply_committed_entries_on_follower<P, L, S, SM>(
+        &mut self,
+        storage: &S,
+        state_machine: &mut SM,
+    ) where
         S: Storage<Payload = P, LogEntryCollection = L>,
         SM: StateMachine<Payload = P>,
     {
         while self.last_applied < self.commit_index {
             self.last_applied += 1;
             if let Some(entry) = storage.get_entry(self.last_applied) {
-                if let EntryType::Command(ref payload) = entry.entry_type {
-                    state_machine.apply(payload);
+                match &entry.entry_type {
+                    EntryType::Command(ref payload) => {
+                        state_machine.apply(payload);
+                    }
+                    EntryType::ConfigChange(_) => {
+                        // Config changes will be applied by the leader
+                        // Followers just need to advance their state
+                    }
                 }
-                // ConfigChange entries will be handled in future tasks
             }
         }
     }
 
-    pub fn advance_commit_index<P, L, S, SM, C>(
+    fn apply_committed_entries<P, L, S, SM, CC>(
+        &mut self,
+        storage: &S,
+        state_machine: &mut SM,
+    ) -> CC
+    where
+        S: Storage<Payload = P, LogEntryCollection = L>,
+        SM: StateMachine<Payload = P>,
+        CC: ConfigChangeCollection,
+    {
+        let mut config_changes = CC::new();
+
+        while self.last_applied < self.commit_index {
+            self.last_applied += 1;
+            if let Some(entry) = storage.get_entry(self.last_applied) {
+                match &entry.entry_type {
+                    EntryType::Command(ref payload) => {
+                        state_machine.apply(payload);
+                    }
+                    EntryType::ConfigChange(ref change) => {
+                        let _ = config_changes.push(self.last_applied, change.clone());
+                    }
+                }
+            }
+        }
+
+        config_changes
+    }
+
+    pub fn advance_commit_index<P, L, S, SM, C, CC>(
         &mut self,
         storage: &S,
         state_machine: &mut SM,
         config: &Configuration<C>,
-    ) where
+    ) -> CC
+    where
         S: Storage<Payload = P, LogEntryCollection = L>,
         SM: StateMachine<Payload = P>,
         C: NodeCollection,
+        CC: ConfigChangeCollection,
     {
         let leader_index = storage.last_log_index();
 
@@ -320,11 +365,13 @@ where
                 if let Some(entry) = storage.get_entry(new_commit) {
                     if entry.term == storage.current_term() {
                         self.commit_index = new_commit;
-                        self.apply_committed_entries(storage, state_machine);
+                        return self.apply_committed_entries(storage, state_machine);
                     }
                 }
             }
         }
+
+        CC::new()
     }
 
     pub fn commit_index(&self) -> LogIndex {
@@ -343,8 +390,16 @@ where
         &self.next_index
     }
 
+    pub fn next_index_mut(&mut self) -> &mut M {
+        &mut self.next_index
+    }
+
     pub fn match_index(&self) -> &M {
         &self.match_index
+    }
+
+    pub fn match_index_mut(&mut self) -> &mut M {
+        &mut self.match_index
     }
 
     /// Handle incoming InstallSnapshot RPC - returns response message
