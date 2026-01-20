@@ -150,6 +150,59 @@ fn test_safety_pre_vote_rejection_stale_log() {
     assert_eq!(*cluster.get_node(1).role(), NodeState::Leader);
 }
 
+/// Test that pre-vote is rejected when candidate's log is behind a snapshot
+#[test]
+fn test_safety_pre_vote_rejection_snapshot_ahead() {
+    // Arrange - 3 node cluster with a low snapshot threshold
+    let mut cluster = TimelessTestCluster::new().with_snapshot_threshold(3);
+    cluster.add_node(1);
+    cluster.add_node(2);
+    cluster.add_node(3);
+    cluster.connect_peers();
+
+    // Node 1 becomes leader
+    cluster
+        .get_node_mut(1)
+        .on_event(Event::TimerFired(TimerKind::Election));
+    cluster.deliver_messages();
+    cluster.deliver_messages();
+
+    assert_eq!(*cluster.get_node(1).role(), NodeState::Leader);
+    let leader_term = cluster.get_node(1).current_term();
+
+    // Partition Node 3 so it misses the entries and snapshot
+    cluster.partition_node(3);
+
+    // Leader appends entries to trigger snapshot creation
+    for i in 1..=3 {
+        cluster
+            .get_node_mut(1)
+            .on_event(Event::ClientCommand(format!("SET k{}=v{}", i, i)));
+        cluster.deliver_messages();
+    }
+
+    // Snapshot should exist on leader (and Node 2)
+    assert!(cluster.get_node(1).storage().load_snapshot().is_some());
+    assert_eq!(cluster.get_node(1).storage().first_log_index(), 4);
+
+    // Heal partition but do not deliver any leader heartbeats yet
+    cluster.heal_partition();
+
+    // Node 3 attempts pre-vote with stale log (behind snapshot)
+    cluster
+        .get_node_mut(3)
+        .on_event(Event::TimerFired(TimerKind::Election));
+    cluster.deliver_messages();
+
+    // Assert - Node 3 should fail pre-vote and stay follower without term change
+    assert_eq!(cluster.get_node(3).current_term(), leader_term);
+    assert_eq!(*cluster.get_node(3).role(), NodeState::Follower);
+
+    // Leader remains unchanged
+    assert_eq!(*cluster.get_node(1).role(), NodeState::Leader);
+    assert_eq!(cluster.get_node(1).current_term(), leader_term);
+}
+
 /// Test that pre-vote doesn't disrupt active leadership
 #[test]
 fn test_safety_pre_vote_does_not_disrupt_leader() {

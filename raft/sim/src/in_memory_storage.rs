@@ -119,8 +119,13 @@ impl Storage for InMemoryStorage {
     }
 
     fn truncate_after(&mut self, index: LogIndex) {
-        // Convert 1-based index to 0-based Vec index
-        let truncate_at = index as usize;
+        // Convert 1-based log index to 0-based Vec index (adjusted by first_index)
+        if index < self.first_index {
+            self.log = InMemoryLogEntryCollection::new(&[]);
+            return;
+        }
+
+        let truncate_at = (index - self.first_index + 1) as usize;
         self.log.truncate(truncate_at);
     }
 

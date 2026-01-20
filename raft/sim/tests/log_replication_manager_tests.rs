@@ -1054,13 +1054,14 @@ fn test_liveness_follower_accepts_append_at_snapshot_point() {
                 success,
                 "Should succeed when prev_log_term matches snapshot term"
             );
-            assert_eq!(match_index, 16);
+            // After truncating to the snapshot point, the new entry becomes index 11
+            assert_eq!(match_index, 11);
         }
         _ => panic!("Expected AppendEntriesResponse"),
     }
 
     // Verify entry was appended
-    assert_eq!(storage.last_log_index(), 16);
+    assert_eq!(storage.last_log_index(), 11);
 }
 
 #[test]

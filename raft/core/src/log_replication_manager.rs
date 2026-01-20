@@ -373,6 +373,9 @@ where
             storage.set_current_term(term);
             storage.set_voted_for(None);
             *role = NodeState::Follower;
+        } else if term == *current_term && *role == NodeState::Candidate {
+            // Candidate receives snapshot from a valid leader at same term - step down
+            *role = NodeState::Follower;
         }
 
         // Check if snapshot is stale (already have more recent snapshot)

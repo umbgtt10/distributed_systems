@@ -240,11 +240,9 @@ The test harness is treated as a **formal contract**.
 
 The current implementation covers the core Raft protocol. The following advanced features remain to be implemented:
 
-- 🔲 **Log Compaction/Snapshotting**: Bounded memory usage for long-running clusters
 - 🔲 **Dynamic Membership**: Adding/removing nodes from the cluster
 - 🔲 **Read-Only Queries**: Linearizable reads without log entries
 - 🔲 **Leadership Transfer**: Graceful handoff for maintenance
-- 🔲 **Pre-vote Protocol**: Prevent disruptions from partitioned nodes
 
 ---
 
