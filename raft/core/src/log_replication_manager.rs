@@ -295,7 +295,7 @@ where
         }
     }
 
-    fn advance_commit_index<P, L, S, SM>(&mut self, storage: &S, state_machine: &mut SM)
+    pub fn advance_commit_index<P, L, S, SM>(&mut self, storage: &S, state_machine: &mut SM)
     where
         S: Storage<Payload = P, LogEntryCollection = L>,
         SM: StateMachine<Payload = P>,

@@ -134,6 +134,10 @@ where
         &self.storage
     }
 
+    pub fn state_machine(&self) -> &SM {
+        &self.state_machine
+    }
+
     pub fn current_term(&self) -> Term {
         self.current_term
     }
@@ -152,10 +156,6 @@ where
         } else {
             Some(&self.peers)
         }
-    }
-
-    pub fn state_machine(&self) -> &SM {
-        &self.state_machine
     }
 
     pub fn timer_service(&self) -> &TS {
@@ -506,6 +506,12 @@ where
         };
         self.storage.append_entries(&[entry]);
         let index = self.storage.last_log_index();
+
+        // If we are a single node cluster, we can advance commit index immediately
+        if self.peers.len() == 0 {
+            self.replication
+                .advance_commit_index(&self.storage, &mut self.state_machine);
+        }
 
         self.send_append_entries_to_followers();
 
