@@ -8,6 +8,7 @@ use embassy_futures::select::{select4, Either4};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::{Receiver, Sender};
 use embassy_time::Duration;
+use raft_core::message_handler::ClientError;
 
 use crate::cancellation_token::CancellationToken;
 use crate::cluster::{ClientRequest, ClusterError};
@@ -29,7 +30,7 @@ use raft_core::event::Event;
 use raft_core::log_replication_manager::LogReplicationManager;
 use raft_core::node_collection::NodeCollection;
 use raft_core::observer::EventLevel;
-use raft_core::raft_node::{ClientError, RaftNode};
+use raft_core::raft_node::RaftNode;
 use raft_core::raft_node_builder::RaftNodeBuilder;
 use raft_core::timer_service::TimerService;
 use raft_core::types::{LogIndex, NodeId};

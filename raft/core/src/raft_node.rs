@@ -5,22 +5,20 @@
 use crate::{
     chunk_collection::ChunkCollection,
     config_change_collection::ConfigChangeCollection,
-    config_change_manager::{ConfigChangeManager, ConfigError},
+    config_change_manager::ConfigChangeManager,
     election_manager::ElectionManager,
     event::Event,
-    log_entry::{ConfigurationChange, EntryType, LogEntry},
     log_entry_collection::LogEntryCollection,
     log_replication_manager::LogReplicationManager,
     map_collection::MapCollection,
-    message_handler::{MessageHandler, MessageHandlerContext},
+    message_handler::{ClientError, MessageHandler, MessageHandlerContext},
     node_collection::NodeCollection,
     node_state::NodeState,
-    observer::{Observer, TimerKind as ObserverTimerKind},
-    raft_messages::RaftMsg,
+    observer::Observer,
     snapshot_manager::SnapshotManager,
     state_machine::StateMachine,
     storage::Storage,
-    timer_service::{TimerKind, TimerService},
+    timer_service::TimerService,
     transport::Transport,
     types::{LogIndex, NodeId, Term},
 };
@@ -54,11 +52,6 @@ where
     snapshot_manager: SnapshotManager,
 
     _phantom: core::marker::PhantomData<CCC>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ClientError {
-    NotLeader,
 }
 
 impl<T, S, P, SM, C, L, CC, M, TS, O, CCC> RaftNode<T, S, P, SM, C, L, CC, M, TS, O, CCC>
@@ -188,85 +181,23 @@ where
         SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
         S: Storage<Payload = P, LogEntryCollection = L>,
     {
+        let handler = MessageHandler::new();
+        let mut ctx = self.create_context();
+
         match event {
-            Event::TimerFired(kind) => self.handle_timer(kind),
-            Event::Message { from, msg } => self.handle_message(from, msg),
+            Event::TimerFired(kind) => {
+                handler.handle_timer(&mut ctx, kind);
+            }
+            Event::Message { from, msg } => {
+                handler.handle_message(&mut ctx, from, msg);
+            }
             Event::ClientCommand(payload) => {
-                let _ = self.submit_client_command(payload);
+                let _ = handler.submit_client_command(&mut ctx, payload);
             }
             Event::ConfigChange(change) => {
-                let _ = self.submit_config_change(change);
+                let _ = handler.submit_config_change(&mut ctx, change);
             }
         }
-    }
-
-    /// Add a server to the cluster configuration
-    ///
-    /// This initiates a configuration change to add a new server to the cluster.
-    /// The change will be replicated through the Raft log and applied when committed.
-    ///
-    /// # Safety Constraints
-    /// - Only the leader can add servers
-    /// - Only one configuration change can be in progress at a time
-    /// - The server must not already be in the cluster
-    pub fn add_server(&mut self, node_id: NodeId) -> Result<LogIndex, ConfigError>
-    where
-        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
-        S: Storage<Payload = P, LogEntryCollection = L>,
-        C: NodeCollection,
-    {
-        let is_leader = self.role == NodeState::Leader;
-        let commit_index = self.replication.commit_index();
-
-        // Validate and get the configuration change
-        let change = self
-            .config_manager
-            .add_server(node_id, self.id, is_leader, commit_index)?;
-
-        // Submit the change
-        let index = self
-            .submit_config_change(change)
-            .map_err(|_| ConfigError::NotLeader)?;
-
-        // Track the pending change
-        self.config_manager.track_pending_change(index);
-
-        Ok(index)
-    }
-
-    /// Remove a server from the cluster configuration
-    ///
-    /// This initiates a configuration change to remove a server from the cluster.
-    /// The change will be replicated through the Raft log and applied when committed.
-    ///
-    /// # Safety Constraints
-    /// - Only the leader can remove servers
-    /// - Only one configuration change can be in progress at a time
-    /// - The server must be in the cluster
-    /// - Cannot remove the last server (cluster would be empty)
-    pub fn remove_server(&mut self, node_id: NodeId) -> Result<LogIndex, ConfigError>
-    where
-        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
-        S: Storage<Payload = P, LogEntryCollection = L>,
-        C: NodeCollection,
-    {
-        let is_leader = self.role == NodeState::Leader;
-        let commit_index = self.replication.commit_index();
-
-        // Validate and get the configuration change
-        let change =
-            self.config_manager
-                .remove_server(node_id, self.id, is_leader, commit_index)?;
-
-        // Submit the change
-        let index = self
-            .submit_config_change(change)
-            .map_err(|_| ConfigError::NotLeader)?;
-
-        // Track the pending change
-        self.config_manager.track_pending_change(index);
-
-        Ok(index)
     }
 
     pub fn submit_client_command(&mut self, payload: P) -> Result<LogIndex, ClientError>
@@ -274,92 +205,14 @@ where
         SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
         S: Storage<Payload = P, LogEntryCollection = L>,
     {
-        if self.role != NodeState::Leader {
-            return Err(ClientError::NotLeader);
-        }
-
-        let entry = LogEntry {
-            term: self.current_term,
-            entry_type: EntryType::Command(payload),
-        };
-        self.storage.append_entries(&[entry]);
-        let index = self.storage.last_log_index();
-
-        // If we are a single node cluster, we can advance commit index immediately
-        if self.config_manager.config().members.len() == 0 {
-            let config_changes: CCC = self.replication.advance_commit_index(
-                &self.storage,
-                &mut self.state_machine,
-                self.config_manager.config(),
-            );
-            self.apply_config_changes(config_changes);
-        }
-
-        self.send_append_entries_to_followers();
-
-        Ok(index)
+        let handler = MessageHandler::new();
+        let mut ctx = self.create_context();
+        handler.submit_client_command(&mut ctx, payload)
     }
 
-    fn submit_config_change(&mut self, change: ConfigurationChange) -> Result<LogIndex, ClientError>
-    where
-        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
-        S: Storage<Payload = P, LogEntryCollection = L>,
-    {
-        if self.role != NodeState::Leader {
-            return Err(ClientError::NotLeader);
-        }
-
-        let entry = LogEntry {
-            term: self.current_term,
-            entry_type: EntryType::ConfigChange(change),
-        };
-        self.storage.append_entries(&[entry]);
-        let index = self.storage.last_log_index();
-
-        // If we are a single node cluster, we can advance commit index immediately
-        if self.config_manager.config().members.len() == 0 {
-            let config_changes: CCC = self.replication.advance_commit_index(
-                &self.storage,
-                &mut self.state_machine,
-                self.config_manager.config(),
-            );
-            self.apply_config_changes(config_changes);
-        }
-
-        self.send_append_entries_to_followers();
-
-        Ok(index)
-    }
-
-    fn handle_timer(&mut self, kind: TimerKind) {
-        let observer_kind = match kind {
-            TimerKind::Election => ObserverTimerKind::Election,
-            TimerKind::Heartbeat => ObserverTimerKind::Heartbeat,
-        };
-        self.observer
-            .timer_fired(self.id, observer_kind, self.current_term);
-
-        match kind {
-            TimerKind::Election => {
-                if self.role != NodeState::Leader {
-                    self.observer.election_timeout(self.id, self.current_term);
-                    self.start_pre_vote();
-
-                    // If we have no peers, immediately start real election (we're the only node)
-                    if self.config_manager.config().members.len() == 0 {
-                        self.start_election();
-                    }
-                }
-            }
-            TimerKind::Heartbeat => {
-                if self.role == NodeState::Leader {
-                    self.send_heartbeats();
-                }
-            }
-        }
-    }
-
-    fn context(&mut self) -> MessageHandlerContext<'_, T, S, P, SM, C, L, CC, M, TS, O, CCC> {
+    fn create_context(
+        &mut self,
+    ) -> MessageHandlerContext<'_, T, S, P, SM, C, L, CC, M, TS, O, CCC> {
         MessageHandlerContext {
             id: &self.id,
             role: &mut self.role,
@@ -374,50 +227,5 @@ where
             snapshot_manager: &mut self.snapshot_manager,
             _phantom: core::marker::PhantomData,
         }
-    }
-
-    fn handle_message(&mut self, from: NodeId, msg: RaftMsg<P, L, CC>)
-    where
-        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
-        S: Storage<Payload = P, LogEntryCollection = L>,
-    {
-        let handler = MessageHandler::new();
-        let mut ctx = self.context();
-        handler.handle_message(&mut ctx, from, msg);
-    }
-
-    fn apply_config_changes(&mut self, changes: CCC)
-    where
-        C: NodeCollection,
-        M: MapCollection,
-        CCC: ConfigChangeCollection,
-    {
-        let handler = MessageHandler::new();
-        let mut ctx = self.context();
-        handler.apply_config_changes(&mut ctx, changes);
-    }
-
-    fn start_pre_vote(&mut self) {
-        let handler = MessageHandler::new();
-        let mut ctx = self.context();
-        handler.start_pre_vote(&mut ctx);
-    }
-
-    fn start_election(&mut self) {
-        let handler = MessageHandler::new();
-        let mut ctx = self.context();
-        handler.start_election(&mut ctx);
-    }
-
-    fn send_heartbeats(&mut self) {
-        let handler = MessageHandler::new();
-        let mut ctx = self.context();
-        handler.send_heartbeats(&mut ctx);
-    }
-
-    fn send_append_entries_to_followers(&mut self) {
-        let handler = MessageHandler::new();
-        let mut ctx = self.context();
-        handler.send_append_entries_to_followers(&mut ctx);
     }
 }

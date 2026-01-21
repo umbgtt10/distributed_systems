@@ -5,8 +5,9 @@
 use crate::{
     chunk_collection::ChunkCollection,
     config_change_collection::ConfigChangeCollection,
-    config_change_manager::ConfigChangeManager,
+    config_change_manager::{ConfigChangeManager, ConfigError},
     election_manager::ElectionManager,
+    log_entry::{ConfigurationChange, EntryType, LogEntry},
     log_entry_collection::LogEntryCollection,
     log_replication_manager::LogReplicationManager,
     map_collection::MapCollection,
@@ -25,6 +26,11 @@ use crate::{
 
 type PhantomData<T, S, P, SM, C, L, CC, M, TS, O, CCC> =
     core::marker::PhantomData<(T, S, P, SM, C, L, CC, M, TS, O, CCC)>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClientError {
+    NotLeader,
+}
 
 /// MessageHandler handles all Raft message processing.
 /// This is a zero-sized stateless type that separates message handling logic from RaftNode.
@@ -95,7 +101,8 @@ where
     }
 
     /// Main entry point for handling messages
-    pub fn handle_message(&self,
+    pub fn handle_message(
+        &self,
         ctx: &mut MessageHandlerContext<T, S, P, SM, C, L, CC, M, TS, O, CCC>,
         from: NodeId,
         msg: RaftMsg<P, L, CC>,
@@ -323,7 +330,7 @@ where
     }
 
     fn handle_append_entries_response(
-        & self,
+        &self,
         ctx: &mut MessageHandlerContext<T, S, P, SM, C, L, CC, M, TS, O, CCC>,
         from: NodeId,
         term: Term,
@@ -482,6 +489,187 @@ where
         }
     }
 
+    /// Add a server to the cluster configuration
+    ///
+    /// This initiates a configuration change to add a new server to the cluster.
+    /// The change will be replicated through the Raft log and applied when committed.
+    ///
+    /// # Safety Constraints
+    /// - Only the leader can add servers
+    /// - Only one configuration change can be in progress at a time
+    /// - The server must not already be in the cluster
+    pub fn add_server(
+        &self,
+        ctx: &mut MessageHandlerContext<'_, T, S, P, SM, C, L, CC, M, TS, O, CCC>,
+        node_id: NodeId,
+    ) -> Result<LogIndex, ConfigError>
+    where
+        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
+        S: Storage<Payload = P, LogEntryCollection = L>,
+        C: NodeCollection,
+    {
+        let is_leader = *ctx.role == NodeState::Leader;
+        let commit_index = ctx.replication.commit_index();
+
+        // Validate and get the configuration change
+        let change = ctx
+            .config_manager
+            .add_server(node_id, *ctx.id, is_leader, commit_index)?;
+
+        // Submit the change
+        let index = self
+            .submit_config_change(ctx, change)
+            .map_err(|_| ConfigError::NotLeader)?;
+
+        // Track the pending change
+        ctx.config_manager.track_pending_change(index);
+
+        Ok(index)
+    }
+
+    /// Remove a server from the cluster configuration
+    ///
+    /// This initiates a configuration change to remove a server from the cluster.
+    /// The change will be replicated through the Raft log and applied when committed.
+    ///
+    /// # Safety Constraints
+    /// - Only the leader can remove servers
+    /// - Only one configuration change can be in progress at a time
+    /// - The server must be in the cluster
+    /// - Cannot remove the last server (cluster would be empty)
+    pub fn remove_server(
+        &self,
+        ctx: &mut MessageHandlerContext<'_, T, S, P, SM, C, L, CC, M, TS, O, CCC>,
+        node_id: NodeId,
+    ) -> Result<LogIndex, ConfigError>
+    where
+        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
+        S: Storage<Payload = P, LogEntryCollection = L>,
+        C: NodeCollection,
+    {
+        let is_leader = *ctx.role == NodeState::Leader;
+        let commit_index = ctx.replication.commit_index();
+
+        // Validate and get the configuration change
+        let change = ctx
+            .config_manager
+            .remove_server(node_id, *ctx.id, is_leader, commit_index)?;
+
+        // Submit the change
+        let index = self
+            .submit_config_change(ctx, change)
+            .map_err(|_| ConfigError::NotLeader)?;
+
+        // Track the pending change
+        ctx.config_manager.track_pending_change(index);
+
+        Ok(index)
+    }
+
+    pub fn submit_client_command(
+        &self,
+        ctx: &mut MessageHandlerContext<'_, T, S, P, SM, C, L, CC, M, TS, O, CCC>,
+        payload: P,
+    ) -> Result<LogIndex, ClientError>
+    where
+        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
+        S: Storage<Payload = P, LogEntryCollection = L>,
+    {
+        if *ctx.role != NodeState::Leader {
+            return Err(ClientError::NotLeader);
+        }
+
+        let entry = LogEntry {
+            term: *ctx.current_term,
+            entry_type: EntryType::Command(payload),
+        };
+        ctx.storage.append_entries(&[entry]);
+        let index = ctx.storage.last_log_index();
+
+        // If we are a single node cluster, we can advance commit index immediately
+        if ctx.config_manager.config().members.len() == 0 {
+            let config_changes: CCC = ctx.replication.advance_commit_index(
+                ctx.storage,
+                ctx.state_machine,
+                ctx.config_manager.config(),
+            );
+            self.apply_config_changes(ctx, config_changes);
+        }
+
+        self.send_append_entries_to_followers(ctx);
+
+        Ok(index)
+    }
+
+    pub fn submit_config_change(
+        &self,
+        ctx: &mut MessageHandlerContext<'_, T, S, P, SM, C, L, CC, M, TS, O, CCC>,
+        change: ConfigurationChange,
+    ) -> Result<LogIndex, ClientError>
+    where
+        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
+        S: Storage<Payload = P, LogEntryCollection = L>,
+    {
+        if *ctx.role != NodeState::Leader {
+            return Err(ClientError::NotLeader);
+        }
+
+        let entry = LogEntry {
+            term: *ctx.current_term,
+            entry_type: EntryType::ConfigChange(change),
+        };
+        ctx.storage.append_entries(&[entry]);
+        let index = ctx.storage.last_log_index();
+
+        // If we are a single node cluster, we can advance commit index immediately
+        if ctx.config_manager.config().members.len() == 0 {
+            let config_changes: CCC = ctx.replication.advance_commit_index(
+                ctx.storage,
+                ctx.state_machine,
+                ctx.config_manager.config(),
+            );
+            self.apply_config_changes(ctx, config_changes);
+        }
+
+        self.send_append_entries_to_followers(ctx);
+
+        Ok(index)
+    }
+
+    pub fn handle_timer(
+        &self,
+        ctx: &mut MessageHandlerContext<'_, T, S, P, SM, C, L, CC, M, TS, O, CCC>,
+        kind: crate::timer_service::TimerKind,
+    ) {
+        use crate::observer::TimerKind as ObserverTimerKind;
+
+        let observer_kind = match kind {
+            crate::timer_service::TimerKind::Election => ObserverTimerKind::Election,
+            crate::timer_service::TimerKind::Heartbeat => ObserverTimerKind::Heartbeat,
+        };
+        ctx.observer
+            .timer_fired(*ctx.id, observer_kind, *ctx.current_term);
+
+        match kind {
+            crate::timer_service::TimerKind::Election => {
+                if *ctx.role != NodeState::Leader {
+                    ctx.observer.election_timeout(*ctx.id, *ctx.current_term);
+                    self.start_pre_vote(ctx);
+
+                    // If we have no peers, immediately start real election (we're the only node)
+                    if ctx.config_manager.config().members.len() == 0 {
+                        self.start_election(ctx);
+                    }
+                }
+            }
+            crate::timer_service::TimerKind::Heartbeat => {
+                if *ctx.role == NodeState::Leader {
+                    self.send_heartbeats(ctx);
+                }
+            }
+        }
+    }
+
     pub fn start_pre_vote(
         &self,
         ctx: &mut MessageHandlerContext<T, S, P, SM, C, L, CC, M, TS, O, CCC>,
@@ -619,7 +807,8 @@ where
     }
 }
 
-impl<T, S, P, SM, C, L, CC, M, TS, O, CCC> Default for MessageHandler<T, S, P, SM, C, L, CC, M, TS, O, CCC>
+impl<T, S, P, SM, C, L, CC, M, TS, O, CCC> Default
+    for MessageHandler<T, S, P, SM, C, L, CC, M, TS, O, CCC>
 where
     P: Clone,
     T: Transport<Payload = P, LogEntries = L, ChunkCollection = CC>,
@@ -637,5 +826,3 @@ where
         Self::new()
     }
 }
-
-
