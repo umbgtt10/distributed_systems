@@ -16,6 +16,7 @@ use crate::{
     node_state::NodeState,
     observer::{Observer, Role, TimerKind as ObserverTimerKind},
     raft_messages::RaftMsg,
+    role_transition_manager::RoleTransitionManager,
     snapshot_manager::SnapshotManager,
     state_machine::StateMachine,
     storage::Storage,
@@ -404,48 +405,16 @@ where
                 candidate_id,
                 last_log_index,
                 last_log_term,
-            } => {
-                self.observer.pre_vote_requested(
-                    candidate_id,
-                    self.id,
-                    term,
-                    last_log_index,
-                    last_log_term,
-                );
-                let response = self.election.handle_pre_vote_request(
-                    term,
-                    candidate_id,
-                    last_log_index,
-                    last_log_term,
-                    self.current_term,
-                    &self.storage,
-                );
-
-                // Log the response
-                if let RaftMsg::PreVoteResponse { vote_granted, .. } = &response {
-                    self.observer
-                        .pre_vote_granted(candidate_id, self.id, *vote_granted, term);
-                }
-
-                self.send(from, response);
-            }
+            } => self.handle_pre_vote_request(
+                from,
+                term,
+                candidate_id,
+                last_log_index,
+                last_log_term,
+            ),
 
             RaftMsg::PreVoteResponse { term, vote_granted } => {
-                // Ignore pre-vote responses from higher terms
-                if term > self.current_term {
-                    return;
-                }
-
-                let should_start_election = self.election.handle_pre_vote_response(
-                    from,
-                    vote_granted,
-                    self.config_manager.config(),
-                );
-
-                if should_start_election {
-                    self.observer.pre_vote_succeeded(self.id, self.current_term);
-                    self.start_election();
-                }
+                self.handle_pre_vote_response(from, term, vote_granted)
             }
 
             RaftMsg::RequestVote {
@@ -453,37 +422,10 @@ where
                 candidate_id,
                 last_log_index,
                 last_log_term,
-            } => {
-                let response = self.election.handle_vote_request(
-                    term,
-                    candidate_id,
-                    last_log_index,
-                    last_log_term,
-                    &mut self.current_term,
-                    &mut self.storage,
-                    &mut self.role,
-                );
-                self.send(from, response);
-            }
+            } => self.handle_vote_request(from, term, candidate_id, last_log_index, last_log_term),
 
             RaftMsg::RequestVoteResponse { term, vote_granted } => {
-                if term > self.current_term {
-                    self.step_down(term);
-                    return;
-                }
-
-                let should_become_leader = self.election.handle_vote_response(
-                    from,
-                    term,
-                    vote_granted,
-                    &self.current_term,
-                    &self.role,
-                    self.config_manager.config(),
-                );
-
-                if should_become_leader {
-                    self.become_leader();
-                }
+                self.handle_vote_response(from, term, vote_granted)
             }
 
             RaftMsg::AppendEntries {
@@ -492,62 +434,21 @@ where
                 prev_log_term,
                 entries,
                 leader_commit,
-            } => {
-                // Reset election timer on valid heartbeat
-                if term >= self.current_term {
-                    self.election.timer_service_mut().reset_election_timer();
-                }
-
-                let (response, config_changes) = self.replication.handle_append_entries(
-                    term,
-                    prev_log_index,
-                    prev_log_term,
-                    entries,
-                    leader_commit,
-                    &mut self.current_term,
-                    &mut self.storage,
-                    &mut self.state_machine,
-                    &mut self.role,
-                );
-                self.apply_config_changes(config_changes);
-                self.send(from, response);
-            }
+            } => self.handle_append_entries(
+                from,
+                term,
+                prev_log_index,
+                prev_log_term,
+                entries,
+                leader_commit,
+            ),
 
             RaftMsg::AppendEntriesResponse {
                 term,
                 success,
                 match_index,
-            } => {
-                if term > self.current_term {
-                    self.step_down(term);
-                    return;
-                }
+            } => self.handle_append_entries_response(from, term, success, match_index),
 
-                if self.role == NodeState::Leader && term == self.current_term {
-                    let old_commit_index = self.replication.commit_index();
-                    let config_changes: CCC = self.replication.handle_append_entries_response(
-                        from,
-                        success,
-                        match_index,
-                        &self.storage,
-                        &mut self.state_machine,
-                        self.config_manager.config(),
-                    );
-                    let new_commit_index = self.replication.commit_index();
-                    if new_commit_index > old_commit_index {
-                        self.observer
-                            .commit_advanced(self.id, old_commit_index, new_commit_index);
-
-                        // Apply any configuration changes
-                        self.apply_config_changes(config_changes);
-
-                        // Check if we should create a snapshot after commit advances
-                        if self.should_create_snapshot() {
-                            let _ = self.create_snapshot_internal();
-                        }
-                    }
-                }
-            }
             RaftMsg::InstallSnapshot {
                 term,
                 leader_id,
@@ -556,44 +457,238 @@ where
                 offset,
                 data,
                 done,
-            } => {
-                // Reset election timer on valid snapshot
-                if term >= self.current_term {
-                    self.election.timer_service_mut().reset_election_timer();
-                }
+            } => self.handle_install_snapshot(
+                from,
+                term,
+                leader_id,
+                last_included_index,
+                last_included_term,
+                offset,
+                data,
+                done,
+            ),
 
-                let response = self.replication.handle_install_snapshot(
-                    term,
-                    leader_id,
-                    last_included_index,
-                    last_included_term,
-                    offset,
-                    data,
-                    done,
-                    &mut self.current_term,
-                    &mut self.storage,
-                    &mut self.state_machine,
-                    &mut self.role,
-                );
-                self.send(from, response);
-            }
             RaftMsg::InstallSnapshotResponse { term, success } => {
-                if term > self.current_term {
-                    self.step_down(term);
-                    return;
-                }
+                self.handle_install_snapshot_response(from, term, success)
+            }
+        }
+    }
 
-                if self.role == NodeState::Leader && term == self.current_term {
-                    // Get the snapshot metadata to know last_included_index
-                    if let Some(snapshot_metadata) = self.storage.snapshot_metadata() {
-                        self.replication.handle_install_snapshot_response(
-                            from,
-                            term,
-                            success,
-                            snapshot_metadata.last_included_index,
-                        );
-                    }
+    fn handle_pre_vote_request(
+        &mut self,
+        from: NodeId,
+        term: Term,
+        candidate_id: NodeId,
+        last_log_index: LogIndex,
+        last_log_term: Term,
+    ) {
+        self.observer.pre_vote_requested(
+            candidate_id,
+            self.id,
+            term,
+            last_log_index,
+            last_log_term,
+        );
+
+        let response = self.election.handle_pre_vote_request(
+            term,
+            candidate_id,
+            last_log_index,
+            last_log_term,
+            self.current_term,
+            &self.storage,
+        );
+
+        // Log the response
+        if let RaftMsg::PreVoteResponse { vote_granted, .. } = &response {
+            self.observer
+                .pre_vote_granted(candidate_id, self.id, *vote_granted, term);
+        }
+
+        self.send(from, response);
+    }
+
+    fn handle_pre_vote_response(&mut self, from: NodeId, term: Term, vote_granted: bool) {
+        // Ignore pre-vote responses from higher terms
+        if term > self.current_term {
+            return;
+        }
+
+        let should_start_election = self.election.handle_pre_vote_response(
+            from,
+            vote_granted,
+            self.config_manager.config(),
+        );
+
+        if should_start_election {
+            self.observer.pre_vote_succeeded(self.id, self.current_term);
+            self.start_election();
+        }
+    }
+
+    fn handle_vote_request(
+        &mut self,
+        from: NodeId,
+        term: Term,
+        candidate_id: NodeId,
+        last_log_index: LogIndex,
+        last_log_term: Term,
+    ) {
+        let response = self.election.handle_vote_request(
+            term,
+            candidate_id,
+            last_log_index,
+            last_log_term,
+            &mut self.current_term,
+            &mut self.storage,
+            &mut self.role,
+        );
+        self.send(from, response);
+    }
+
+    fn handle_vote_response(&mut self, from: NodeId, term: Term, vote_granted: bool) {
+        if term > self.current_term {
+            self.step_down(term);
+            return;
+        }
+
+        let should_become_leader = self.election.handle_vote_response(
+            from,
+            term,
+            vote_granted,
+            &self.current_term,
+            &self.role,
+            self.config_manager.config(),
+        );
+
+        if should_become_leader {
+            self.become_leader();
+        }
+    }
+
+    fn handle_append_entries(
+        &mut self,
+        from: NodeId,
+        term: Term,
+        prev_log_index: LogIndex,
+        prev_log_term: Term,
+        entries: L,
+        leader_commit: LogIndex,
+    ) where
+        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
+        S: Storage<Payload = P, LogEntryCollection = L>,
+    {
+        // Reset election timer on valid heartbeat
+        if term >= self.current_term {
+            self.election.timer_service_mut().reset_election_timer();
+        }
+
+        let (response, config_changes) = self.replication.handle_append_entries(
+            term,
+            prev_log_index,
+            prev_log_term,
+            entries,
+            leader_commit,
+            &mut self.current_term,
+            &mut self.storage,
+            &mut self.state_machine,
+            &mut self.role,
+        );
+        self.apply_config_changes(config_changes);
+        self.send(from, response);
+    }
+
+    fn handle_append_entries_response(
+        &mut self,
+        from: NodeId,
+        term: Term,
+        success: bool,
+        match_index: LogIndex,
+    ) where
+        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
+    {
+        if term > self.current_term {
+            self.step_down(term);
+            return;
+        }
+
+        if self.role == NodeState::Leader && term == self.current_term {
+            let old_commit_index = self.replication.commit_index();
+            let config_changes: CCC = self.replication.handle_append_entries_response(
+                from,
+                success,
+                match_index,
+                &self.storage,
+                &mut self.state_machine,
+                self.config_manager.config(),
+            );
+            let new_commit_index = self.replication.commit_index();
+
+            if new_commit_index > old_commit_index {
+                self.observer
+                    .commit_advanced(self.id, old_commit_index, new_commit_index);
+
+                // Apply any configuration changes
+                self.apply_config_changes(config_changes);
+
+                // Check if we should create a snapshot after commit advances
+                if self.should_create_snapshot() {
+                    let _ = self.create_snapshot_internal();
                 }
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn handle_install_snapshot(
+        &mut self,
+        from: NodeId,
+        term: Term,
+        leader_id: NodeId,
+        last_included_index: LogIndex,
+        last_included_term: Term,
+        offset: u64,
+        data: CC,
+        done: bool,
+    ) where
+        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
+    {
+        // Reset election timer on valid snapshot
+        if term >= self.current_term {
+            self.election.timer_service_mut().reset_election_timer();
+        }
+
+        let response = self.replication.handle_install_snapshot(
+            term,
+            leader_id,
+            last_included_index,
+            last_included_term,
+            offset,
+            data,
+            done,
+            &mut self.current_term,
+            &mut self.storage,
+            &mut self.state_machine,
+            &mut self.role,
+        );
+        self.send(from, response);
+    }
+
+    fn handle_install_snapshot_response(&mut self, from: NodeId, term: Term, success: bool) {
+        if term > self.current_term {
+            self.step_down(term);
+            return;
+        }
+
+        if self.role == NodeState::Leader && term == self.current_term {
+            // Get the snapshot metadata to know last_included_index
+            if let Some(snapshot_metadata) = self.storage.snapshot_metadata() {
+                self.replication.handle_install_snapshot_response(
+                    from,
+                    term,
+                    success,
+                    snapshot_metadata.last_included_index,
+                );
             }
         }
     }
@@ -627,29 +722,29 @@ where
     }
 
     fn start_pre_vote(&mut self) {
-        self.observer.pre_vote_started(self.id, self.current_term);
-
-        let pre_vote_request =
-            self.election
-                .start_pre_vote(self.id, self.current_term, &self.storage);
+        let pre_vote_request = RoleTransitionManager::start_pre_vote(
+            self.id,
+            self.current_term,
+            &self.storage,
+            &mut self.election,
+            &mut self.observer,
+        );
 
         self.broadcast(pre_vote_request);
     }
 
     fn start_election(&mut self) {
-        let old_role = self.node_state_to_role();
+        let old_role = RoleTransitionManager::node_state_to_role(&self.role);
 
-        let vote_request = self.election.start_election(
+        let vote_request = RoleTransitionManager::start_election(
             self.id,
             &mut self.current_term,
             &mut self.storage,
             &mut self.role,
+            &mut self.election,
+            &mut self.observer,
+            old_role,
         );
-
-        self.observer.election_started(self.id, self.current_term);
-        self.observer
-            .role_changed(self.id, old_role, Role::Candidate, self.current_term);
-        self.observer.voted_for(self.id, self.id, self.current_term);
 
         self.broadcast(vote_request);
 
@@ -660,40 +755,39 @@ where
     }
 
     fn become_leader(&mut self) {
-        let old_role = self.node_state_to_role();
-        self.role = NodeState::Leader;
+        let old_role = RoleTransitionManager::node_state_to_role(&self.role);
 
-        self.observer
-            .role_changed(self.id, old_role, Role::Leader, self.current_term);
-        self.observer.leader_elected(self.id, self.current_term);
-
-        // Initialize replication state
-        self.replication
-            .initialize_leader_state(self.config_manager.config().members.iter(), &self.storage);
-
-        self.election.timer_service_mut().stop_timers();
-        self.election.timer_service_mut().reset_heartbeat_timer();
+        RoleTransitionManager::become_leader(
+            self.id,
+            self.current_term,
+            &mut self.role,
+            &self.storage,
+            self.config_manager.config().members.iter(),
+            &mut self.election,
+            &mut self.replication,
+            &mut self.observer,
+            old_role,
+        );
 
         // Send initial heartbeat
         self.send_append_entries_to_followers();
     }
 
     fn step_down(&mut self, new_term: Term) {
-        let old_role = self.node_state_to_role();
+        let old_role = RoleTransitionManager::node_state_to_role(&self.role);
         let old_term = self.current_term;
 
-        if old_role == Role::Leader {
-            self.observer.leader_lost(self.id, old_term, new_term);
-        }
-
-        self.current_term = new_term;
-        self.storage.set_current_term(new_term);
-        self.role = NodeState::Follower;
-        self.storage.set_voted_for(None);
-        self.election.timer_service_mut().reset_election_timer();
-
-        self.observer
-            .role_changed(self.id, old_role, Role::Follower, new_term);
+        RoleTransitionManager::step_down(
+            self.id,
+            old_term,
+            new_term,
+            &mut self.current_term,
+            &mut self.storage,
+            &mut self.role,
+            &mut self.election,
+            &mut self.observer,
+            old_role,
+        );
     }
 
     // ============================================================
@@ -740,10 +834,6 @@ where
 
     /// Convert NodeState to Observer Role
     fn node_state_to_role(&self) -> Role {
-        match self.role {
-            NodeState::Follower => Role::Follower,
-            NodeState::Candidate => Role::Candidate,
-            NodeState::Leader => Role::Leader,
-        }
+        RoleTransitionManager::node_state_to_role(&self.role)
     }
 }

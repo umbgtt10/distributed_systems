@@ -22,6 +22,7 @@ pub mod observer;
 pub mod raft_messages;
 pub mod raft_node;
 pub mod raft_node_builder;
+pub mod role_transition_manager;
 pub mod snapshot;
 pub mod snapshot_manager;
 pub mod state_machine;
