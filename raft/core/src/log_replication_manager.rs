@@ -141,7 +141,7 @@ where
 
     /// Handle incoming AppendEntries - returns response message
     #[allow(clippy::too_many_arguments)]
-    pub fn handle_append_entries<P, L, C, S, SM>(
+    pub fn handle_append_entries<P, L, C, CC, S, SM>(
         &mut self,
         term: Term,
         prev_log_index: LogIndex,
@@ -152,13 +152,14 @@ where
         storage: &mut S,
         state_machine: &mut SM,
         role: &mut NodeState,
-    ) -> RaftMsg<P, L, C>
+    ) -> (RaftMsg<P, L, C>, CC)
     where
         P: Clone,
         S: Storage<Payload = P, LogEntryCollection = L> + Clone,
         SM: StateMachine<Payload = P>,
         L: LogEntryCollection<Payload = P> + Clone,
         C: ChunkCollection + Clone,
+        CC: ConfigChangeCollection,
     {
         // Update term if necessary
         if term > *current_term {
@@ -171,8 +172,8 @@ where
             *role = NodeState::Follower;
         }
 
-        let success = if term < *current_term {
-            false
+        let (success, config_changes) = if term < *current_term {
+            (false, CC::new())
         } else {
             self.try_append_entries(
                 prev_log_index,
@@ -184,11 +185,13 @@ where
             )
         };
 
-        RaftMsg::AppendEntriesResponse {
+        let response = RaftMsg::AppendEntriesResponse {
             term: *current_term,
             success,
             match_index: storage.last_log_index(),
-        }
+        };
+
+        (response, config_changes)
     }
 
     /// Handle AppendEntries response from follower
@@ -226,7 +229,7 @@ where
         CC::new()
     }
 
-    fn try_append_entries<P, L, S, SM>(
+    fn try_append_entries<P, L, S, SM, CC>(
         &mut self,
         prev_log_index: LogIndex,
         prev_log_term: Term,
@@ -234,15 +237,16 @@ where
         leader_commit: LogIndex,
         storage: &mut S,
         state_machine: &mut SM,
-    ) -> bool
+    ) -> (bool, CC)
     where
         S: Storage<Payload = P, LogEntryCollection = L>,
         SM: StateMachine<Payload = P>,
         L: LogEntryCollection<Payload = P>,
+        CC: ConfigChangeCollection,
     {
         // Check log consistency
         if !self.check_log_consistency(prev_log_index, prev_log_term, storage) {
-            return false;
+            return (false, CC::new());
         }
 
         // Append entries if any
@@ -257,10 +261,11 @@ where
         // Update commit index
         if leader_commit > self.commit_index {
             self.commit_index = leader_commit.min(storage.last_log_index());
-            self.apply_committed_entries_on_follower(storage, state_machine);
+            let config_changes = self.apply_committed_entries(storage, state_machine);
+            return (true, config_changes);
         }
 
-        true
+        (true, CC::new())
     }
 
     fn check_log_consistency<P, L, S>(
@@ -290,31 +295,6 @@ where
 
         // Entry not found in log or snapshot
         false
-    }
-
-    /// Apply committed entries on follower (doesn't track config changes)
-    fn apply_committed_entries_on_follower<P, L, S, SM>(
-        &mut self,
-        storage: &S,
-        state_machine: &mut SM,
-    ) where
-        S: Storage<Payload = P, LogEntryCollection = L>,
-        SM: StateMachine<Payload = P>,
-    {
-        while self.last_applied < self.commit_index {
-            self.last_applied += 1;
-            if let Some(entry) = storage.get_entry(self.last_applied) {
-                match &entry.entry_type {
-                    EntryType::Command(ref payload) => {
-                        state_machine.apply(payload);
-                    }
-                    EntryType::ConfigChange(_) => {
-                        // Config changes will be applied by the leader
-                        // Followers just need to advance their state
-                    }
-                }
-            }
-        }
     }
 
     fn apply_committed_entries<P, L, S, SM, CC>(

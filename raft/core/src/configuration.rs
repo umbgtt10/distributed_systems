@@ -35,7 +35,12 @@ impl<C: NodeCollection> Configuration<C> {
     /// Calculate the quorum size (simple majority)
     /// For a cluster of N nodes, quorum = ⌊N/2⌋ + 1
     pub fn quorum_size(&self) -> usize {
-        self.size().div_ceil(2)
+        let size = self.size();
+        if size == 0 {
+            0
+        } else {
+            (size / 2) + 1
+        }
     }
 
     /// Check if a given count meets the quorum requirement

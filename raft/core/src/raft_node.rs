@@ -8,7 +8,7 @@ use crate::{
     configuration::Configuration,
     election_manager::ElectionManager,
     event::Event,
-    log_entry::LogEntry,
+    log_entry::{ConfigurationChange, EntryType, LogEntry},
     log_entry_collection::LogEntryCollection,
     log_replication_manager::LogReplicationManager,
     map_collection::MapCollection,
@@ -51,12 +51,24 @@ where
     election: ElectionManager<C, TS>,
     replication: LogReplicationManager<M>,
 
+    // Configuration change tracking
+    pending_config_change: Option<LogIndex>,
+
     _phantom: core::marker::PhantomData<CCC>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClientError {
     NotLeader,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigError {
+    NotLeader,
+    ConfigChangeInProgress,
+    NodeAlreadyExists,
+    NodeNotFound,
+    CannotRemoveLastNode,
 }
 
 impl<T, S, P, SM, C, L, CC, M, TS, O, CCC> RaftNode<T, S, P, SM, C, L, CC, M, TS, O, CCC>
@@ -125,6 +137,7 @@ where
             snapshot_threshold,
             election,
             replication,
+            pending_config_change: None,
             _phantom: core::marker::PhantomData,
         }
     }
@@ -169,9 +182,159 @@ where
         self.election.timer_service()
     }
 
-    // ============================================================
-    // SNAPSHOT OPERATIONS
-    // ============================================================
+    pub fn config(&self) -> &Configuration<C> {
+        &self.config
+    }
+
+    pub fn is_committed(&self, index: LogIndex) -> bool {
+        index <= self.replication.commit_index()
+    }
+
+    pub fn observer(&mut self) -> &mut O {
+        &mut self.observer
+    }
+
+    pub fn on_event(&mut self, event: Event<P, L, CC>)
+    where
+        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
+        S: Storage<Payload = P, LogEntryCollection = L>,
+    {
+        match event {
+            Event::TimerFired(kind) => self.handle_timer(kind),
+            Event::Message { from, msg } => self.handle_message(from, msg),
+            Event::ClientCommand(payload) => {
+                let _ = self.submit_client_command(payload);
+            }
+            Event::ConfigChange(change) => {
+                let _ = self.submit_config_change(change);
+            }
+        }
+    }
+
+    /// Add a server to the cluster configuration
+    ///
+    /// This initiates a configuration change to add a new server to the cluster.
+    /// The change will be replicated through the Raft log and applied when committed.
+    ///
+    /// # Safety Constraints
+    /// - Only the leader can add servers
+    /// - Only one configuration change can be in progress at a time
+    /// - The server must not already be in the cluster
+    pub fn add_server(&mut self, node_id: NodeId) -> Result<LogIndex, ConfigError>
+    where
+        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
+        S: Storage<Payload = P, LogEntryCollection = L>,
+        C: NodeCollection,
+    {
+        // Check if we're the leader
+        if self.role != NodeState::Leader {
+            return Err(ConfigError::NotLeader);
+        }
+
+        // Check if there's already a config change in progress
+        if let Some(pending_index) = self.pending_config_change {
+            if !self.is_committed(pending_index) {
+                return Err(ConfigError::ConfigChangeInProgress);
+            }
+        }
+
+        // Check if node already exists in configuration
+        if node_id == self.id || self.config.contains(node_id) {
+            return Err(ConfigError::NodeAlreadyExists);
+        }
+
+        // Submit the configuration change
+        let change = ConfigurationChange::AddServer(node_id);
+        let index = self
+            .submit_config_change(change)
+            .map_err(|_| ConfigError::NotLeader)?;
+
+        // Track pending config change
+        self.pending_config_change = Some(index);
+
+        Ok(index)
+    }
+
+    /// Remove a server from the cluster configuration
+    ///
+    /// This initiates a configuration change to remove a server from the cluster.
+    /// The change will be replicated through the Raft log and applied when committed.
+    ///
+    /// # Safety Constraints
+    /// - Only the leader can remove servers
+    /// - Only one configuration change can be in progress at a time
+    /// - The server must be in the cluster
+    /// - Cannot remove the last server (cluster would be empty)
+    pub fn remove_server(&mut self, node_id: NodeId) -> Result<LogIndex, ConfigError>
+    where
+        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
+        S: Storage<Payload = P, LogEntryCollection = L>,
+        C: NodeCollection,
+    {
+        // Check if we're the leader
+        if self.role != NodeState::Leader {
+            return Err(ConfigError::NotLeader);
+        }
+
+        // Check if there's already a config change in progress
+        if let Some(pending_index) = self.pending_config_change {
+            if !self.is_committed(pending_index) {
+                return Err(ConfigError::ConfigChangeInProgress);
+            }
+        }
+
+        // Check if this would leave the cluster empty
+        if self.config.size() == 1 {
+            return Err(ConfigError::CannotRemoveLastNode);
+        }
+
+        // Check if node exists in configuration (including self)
+        if node_id != self.id && !self.config.contains(node_id) {
+            return Err(ConfigError::NodeNotFound);
+        }
+
+        // Submit the configuration change
+        let change = ConfigurationChange::RemoveServer(node_id);
+        let index = self
+            .submit_config_change(change)
+            .map_err(|_| ConfigError::NotLeader)?;
+
+        // Track pending config change
+        self.pending_config_change = Some(index);
+
+        Ok(index)
+    }
+
+    pub fn submit_client_command(&mut self, payload: P) -> Result<LogIndex, ClientError>
+    where
+        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
+        S: Storage<Payload = P, LogEntryCollection = L>,
+    {
+        if self.role != NodeState::Leader {
+            return Err(ClientError::NotLeader);
+        }
+
+        let entry = LogEntry {
+            term: self.current_term,
+            entry_type: EntryType::Command(payload),
+        };
+        self.storage.append_entries(&[entry]);
+        let index = self.storage.last_log_index();
+
+        // If we are a single node cluster, we can advance commit index immediately
+        if self.config.members.len() == 0 {
+            let config_changes: CCC = self.replication.advance_commit_index(
+                &self.storage,
+                &mut self.state_machine,
+                &self.config,
+            );
+            self.apply_config_changes(config_changes);
+        }
+
+        self.send_append_entries_to_followers();
+
+        Ok(index)
+    }
 
     /// Internal snapshot creation logic.
     /// Creates snapshot of state machine and saves to storage.
@@ -252,25 +415,35 @@ where
         self.storage.discard_entries_before(last_included_index + 1);
     }
 
-    // ============================================================
-    // EVENT HANDLING
-    // ============================================================
-
-    pub fn on_event(&mut self, event: Event<P, L, CC>)
+    fn submit_config_change(&mut self, change: ConfigurationChange) -> Result<LogIndex, ClientError>
     where
         SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
         S: Storage<Payload = P, LogEntryCollection = L>,
     {
-        match event {
-            Event::TimerFired(kind) => self.handle_timer(kind),
-            Event::Message { from, msg } => self.handle_message(from, msg),
-            Event::ClientCommand(payload) => {
-                let _ = self.submit_client_command(payload);
-            }
-            Event::ConfigChange(change) => {
-                let _ = self.submit_config_change(change);
-            }
+        if self.role != NodeState::Leader {
+            return Err(ClientError::NotLeader);
         }
+
+        let entry = LogEntry {
+            term: self.current_term,
+            entry_type: EntryType::ConfigChange(change),
+        };
+        self.storage.append_entries(&[entry]);
+        let index = self.storage.last_log_index();
+
+        // If we are a single node cluster, we can advance commit index immediately
+        if self.config.members.len() == 0 {
+            let config_changes: CCC = self.replication.advance_commit_index(
+                &self.storage,
+                &mut self.state_machine,
+                &self.config,
+            );
+            self.apply_config_changes(config_changes);
+        }
+
+        self.send_append_entries_to_followers();
+
+        Ok(index)
     }
 
     fn handle_timer(&mut self, kind: TimerKind) {
@@ -404,7 +577,7 @@ where
                     self.election.timer_service_mut().reset_election_timer();
                 }
 
-                let response = self.replication.handle_append_entries(
+                let (response, config_changes) = self.replication.handle_append_entries(
                     term,
                     prev_log_index,
                     prev_log_term,
@@ -415,6 +588,7 @@ where
                     &mut self.state_machine,
                     &mut self.role,
                 );
+                self.apply_config_changes(config_changes);
                 self.send(from, response);
             }
 
@@ -503,75 +677,6 @@ where
         }
     }
 
-    pub fn submit_client_command(&mut self, payload: P) -> Result<LogIndex, ClientError>
-    where
-        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
-        S: Storage<Payload = P, LogEntryCollection = L>,
-    {
-        if self.role != NodeState::Leader {
-            return Err(ClientError::NotLeader);
-        }
-
-        let entry = LogEntry {
-            term: self.current_term,
-            entry_type: crate::log_entry::EntryType::Command(payload),
-        };
-        self.storage.append_entries(&[entry]);
-        let index = self.storage.last_log_index();
-
-        // If we are a single node cluster, we can advance commit index immediately
-        if self.config.members.len() == 0 {
-            let config_changes: CCC = self.replication.advance_commit_index(
-                &self.storage,
-                &mut self.state_machine,
-                &self.config,
-            );
-            self.apply_config_changes(config_changes);
-        }
-
-        self.send_append_entries_to_followers();
-
-        Ok(index)
-    }
-
-    pub fn submit_config_change(
-        &mut self,
-        change: crate::log_entry::ConfigurationChange,
-    ) -> Result<LogIndex, ClientError>
-    where
-        SM: StateMachine<Payload = P, SnapshotData = S::SnapshotData>,
-        S: Storage<Payload = P, LogEntryCollection = L>,
-    {
-        if self.role != NodeState::Leader {
-            return Err(ClientError::NotLeader);
-        }
-
-        let entry = LogEntry {
-            term: self.current_term,
-            entry_type: crate::log_entry::EntryType::ConfigChange(change),
-        };
-        self.storage.append_entries(&[entry]);
-        let index = self.storage.last_log_index();
-
-        // If we are a single node cluster, we can advance commit index immediately
-        if self.config.members.len() == 0 {
-            let config_changes: CCC = self.replication.advance_commit_index(
-                &self.storage,
-                &mut self.state_machine,
-                &self.config,
-            );
-            self.apply_config_changes(config_changes);
-        }
-
-        self.send_append_entries_to_followers();
-
-        Ok(index)
-    }
-
-    pub fn is_committed(&self, index: LogIndex) -> bool {
-        index <= self.replication.commit_index()
-    }
-
     /// Apply configuration changes that have been committed
     fn apply_config_changes(&mut self, changes: CCC)
     where
@@ -579,8 +684,6 @@ where
         M: MapCollection,
         CCC: ConfigChangeCollection,
     {
-        use crate::log_entry::ConfigurationChange;
-
         for (_index, change) in changes.iter() {
             match change {
                 ConfigurationChange::AddServer(node_id) => {
@@ -636,12 +739,15 @@ where
                     }
                 }
             }
+
+            // Clear pending config change flag if this change was committed
+            if let Some(pending_index) = self.pending_config_change {
+                if _index == pending_index {
+                    self.pending_config_change = None;
+                }
+            }
         }
     }
-
-    // ============================================================
-    // STATE TRANSITIONS
-    // ============================================================
 
     fn start_pre_vote(&mut self) {
         self.observer.pre_vote_started(self.id, self.current_term);
@@ -753,14 +859,6 @@ where
                 .get_append_entries_for_peer(peer, self.id, &self.storage);
             self.send(peer, msg);
         }
-    }
-
-    // ============================================================
-    // OBSERVER ACCESS
-    // ============================================================
-
-    pub fn observer(&mut self) -> &mut O {
-        &mut self.observer
     }
 
     /// Convert NodeState to Observer Role

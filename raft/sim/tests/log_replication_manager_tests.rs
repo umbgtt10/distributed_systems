@@ -48,7 +48,7 @@ fn test_liveness_accept_entries_from_leader() {
         },
     ]);
 
-    let response = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         2, // term
         0, // prev_log_index
         0, // prev_log_term
@@ -57,7 +57,7 @@ fn test_liveness_accept_entries_from_leader() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     match response {
@@ -86,7 +86,7 @@ fn test_safety_reject_entries_from_stale_term() {
         entry_type: EntryType::Command("cmd1".to_string()),
     }]);
 
-    let response = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         3, // stale term
         0, // prev_log_index
         0, // prev_log_term
@@ -95,7 +95,7 @@ fn test_safety_reject_entries_from_stale_term() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     match response {
@@ -124,7 +124,7 @@ fn test_safety_reject_inconsistent_prev_log() {
         entry_type: EntryType::Command("cmd".to_string()),
     }]);
 
-    let response = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         2,
         5, // prev_log_index (we don't have this!)
         2, // prev_log_term
@@ -133,7 +133,7 @@ fn test_safety_reject_inconsistent_prev_log() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     match response {
@@ -166,7 +166,7 @@ fn test_safety_reject_mismatched_prev_log_term() {
     }]);
 
     // Leader thinks our entry at index 1 has term 2 (but we have term 1)
-    let response = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         3,
         1, // prev_log_index
         2, // prev_log_term (mismatch!)
@@ -175,7 +175,7 @@ fn test_safety_reject_mismatched_prev_log_term() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     match response {
@@ -218,7 +218,7 @@ fn test_safety_delete_conflicting_entries() {
         entry_type: EntryType::Command("new_cmd2".to_string()),
     }]);
 
-    replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (_response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         2,
         1, // prev_log_index (entry 1 matches)
         1, // prev_log_term
@@ -227,7 +227,7 @@ fn test_safety_delete_conflicting_entries() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     // Should have deleted cmd3 and replaced cmd2
@@ -265,7 +265,7 @@ fn test_liveness_heartbeat_updates_commit_index() {
     // Empty AppendEntries (heartbeat) with leader_commit = 2
     let entries = InMemoryLogEntryCollection::new(&[]);
 
-    replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (_response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         2,
         2, // prev_log_index
         2, // prev_log_term
@@ -274,7 +274,7 @@ fn test_liveness_heartbeat_updates_commit_index() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     assert_eq!(
@@ -295,7 +295,7 @@ fn test_safety_step_down_on_higher_term_append_entries() {
 
     let entries = InMemoryLogEntryCollection::new(&[]);
 
-    replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (_response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         5, // higher term
         0,
         0,
@@ -304,7 +304,7 @@ fn test_safety_step_down_on_higher_term_append_entries() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     assert_eq!(current_term, 5, "Should update to higher term");
@@ -656,7 +656,7 @@ fn test_safety_append_entries_with_exact_match() {
         },
     ]);
 
-    replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (_response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         2,
         0,
         0,
@@ -665,7 +665,7 @@ fn test_safety_append_entries_with_exact_match() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     // Should still have 2 entries (no duplicates)
@@ -681,11 +681,11 @@ fn test_safety_commit_index_never_decreases() {
     storage.append_entries(&[
         LogEntry {
             term: 2,
-            entry_type: raft_core::log_entry::EntryType::Command("cmd1".to_string()),
+            entry_type: EntryType::Command("cmd1".to_string()),
         },
         LogEntry {
             term: 2,
-            entry_type: raft_core::log_entry::EntryType::Command("cmd2".to_string()),
+            entry_type: EntryType::Command("cmd2".to_string()),
         },
     ]);
 
@@ -695,7 +695,8 @@ fn test_safety_commit_index_never_decreases() {
 
     // First set commit index to 2
     let entries = InMemoryLogEntryCollection::new(&[]);
-    replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+
+    let (_response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         2,
         2,
         2,
@@ -704,14 +705,14 @@ fn test_safety_commit_index_never_decreases() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     assert_eq!(replication.commit_index(), 2);
 
     // Leader sends heartbeat with lower commit index
     let entries2 = InMemoryLogEntryCollection::new(&[]);
-    replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (_response2, _config_changes2) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         2,
         2,
         2,
@@ -720,7 +721,7 @@ fn test_safety_commit_index_never_decreases() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     // commit_index should not decrease
@@ -740,11 +741,11 @@ fn test_liveness_three_node_cluster_majority() {
     storage.append_entries(&[
         LogEntry {
             term: 1,
-            entry_type: raft_core::log_entry::EntryType::Command("cmd1".to_string()),
+            entry_type: EntryType::Command("cmd1".to_string()),
         },
         LogEntry {
             term: 1,
-            entry_type: raft_core::log_entry::EntryType::Command("cmd2".to_string()),
+            entry_type: EntryType::Command("cmd2".to_string()),
         },
     ]);
 
@@ -784,7 +785,7 @@ fn test_liveness_get_append_entries_with_compacted_snapshot_point() {
     let entries: Vec<LogEntry<String>> = (1..=15)
         .map(|i| LogEntry {
             term: 2,
-            entry_type: raft_core::log_entry::EntryType::Command(format!("cmd{}", i)),
+            entry_type: EntryType::Command(format!("cmd{}", i)),
         })
         .collect();
     storage.append_entries(&entries);
@@ -978,7 +979,7 @@ fn test_safety_follower_rejects_append_with_compacted_prev_log() {
         entry_type: raft_core::log_entry::EntryType::Command("new_cmd".to_string()),
     }]);
 
-    let response = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         3,              // term
         10,             // prev_log_index (compacted)
         2,              // prev_log_term
@@ -987,11 +988,11 @@ fn test_safety_follower_rejects_append_with_compacted_prev_log() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     match response {
-        raft_core::raft_messages::RaftMsg::AppendEntriesResponse {
+        RaftMsg::AppendEntriesResponse {
             term,
             success,
             match_index: _,
@@ -1025,7 +1026,7 @@ fn test_liveness_follower_accepts_append_at_snapshot_point() {
     let entries: Vec<LogEntry<String>> = (1..=15)
         .map(|i| LogEntry {
             term: 2,
-            entry_type: raft_core::log_entry::EntryType::Command(format!("cmd{}", i)),
+            entry_type: EntryType::Command(format!("cmd{}", i)),
         })
         .collect();
     storage.append_entries(&entries);
@@ -1054,10 +1055,10 @@ fn test_liveness_follower_accepts_append_at_snapshot_point() {
     // Leader sends AppendEntries with prev_log_index=10 (at snapshot point), prev_log_term=2
     let leader_entries = InMemoryLogEntryCollection::new(&[LogEntry {
         term: 3,
-        entry_type: raft_core::log_entry::EntryType::Command("cmd16".to_string()),
+        entry_type: EntryType::Command("cmd16".to_string()),
     }]);
 
-    let response = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         3,              // term
         10,             // prev_log_index (at snapshot point)
         2,              // prev_log_term (matches snapshot)
@@ -1066,7 +1067,7 @@ fn test_liveness_follower_accepts_append_at_snapshot_point() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     match response {
@@ -1133,10 +1134,10 @@ fn test_safety_follower_rejects_append_with_mismatched_snapshot_term() {
     // Leader sends AppendEntries with prev_log_index=10 but WRONG term
     let leader_entries = InMemoryLogEntryCollection::new(&[LogEntry {
         term: 3,
-        entry_type: raft_core::log_entry::EntryType::Command("cmd16".to_string()),
+        entry_type: EntryType::Command("cmd16".to_string()),
     }]);
 
-    let response = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         3,  // term
         10, // prev_log_index (at snapshot point)
         3,  // prev_log_term (WRONG - should be 2!)
@@ -1145,7 +1146,7 @@ fn test_safety_follower_rejects_append_with_mismatched_snapshot_term() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     match response {
@@ -1211,15 +1212,15 @@ fn test_liveness_both_nodes_compacted_replication_continues() {
     let leader_entries = InMemoryLogEntryCollection::new(&[
         LogEntry {
             term: 2,
-            entry_type: raft_core::log_entry::EntryType::Command("cmd21".to_string()),
+            entry_type: EntryType::Command("cmd21".to_string()),
         },
         LogEntry {
             term: 2,
-            entry_type: raft_core::log_entry::EntryType::Command("cmd22".to_string()),
+            entry_type: EntryType::Command("cmd22".to_string()),
         },
     ]);
 
-    let response = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         2,  // term
         20, // prev_log_index (in follower's log)
         2,  // prev_log_term
@@ -1228,7 +1229,7 @@ fn test_liveness_both_nodes_compacted_replication_continues() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     match response {
@@ -1290,10 +1291,10 @@ fn test_safety_follower_rejects_inconsistent_snapshot() {
     // Leader thinks snapshot should be term 2 (different history!)
     let leader_entries = InMemoryLogEntryCollection::new(&[LogEntry {
         term: 3,
-        entry_type: raft_core::log_entry::EntryType::Command("cmd11".to_string()),
+        entry_type: EntryType::Command("cmd11".to_string()),
     }]);
 
-    let response = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         3,  // term
         10, // prev_log_index
         2,  // prev_log_term (expects 2, but follower has 1)
@@ -1302,11 +1303,11 @@ fn test_safety_follower_rejects_inconsistent_snapshot() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     match response {
-        raft_core::raft_messages::RaftMsg::AppendEntriesResponse {
+        RaftMsg::AppendEntriesResponse {
             term,
             success,
             match_index: _,
@@ -1615,7 +1616,7 @@ fn test_liveness_snapshot_transfer_with_chunks() {
     );
 
     match response3 {
-        raft_core::raft_messages::RaftMsg::InstallSnapshotResponse { term, success } => {
+        RaftMsg::InstallSnapshotResponse { term, success } => {
             assert_eq!(term, 2);
             assert!(success, "Should complete snapshot installation");
         }
@@ -1676,7 +1677,7 @@ fn test_liveness_replication_resumes_after_snapshot_install() {
         },
     ]);
 
-    let response = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryStorage, InMemoryStateMachine>(
+    let (response, _config_changes) = replication.handle_append_entries::<String, InMemoryLogEntryCollection, InMemoryChunkCollection, InMemoryConfigChangeCollection, InMemoryStorage, InMemoryStateMachine>(
         2,  // term
         10, // prev_log_index (at snapshot point)
         2,  // prev_log_term
@@ -1685,7 +1686,7 @@ fn test_liveness_replication_resumes_after_snapshot_install() {
         &mut current_term,
         &mut storage,
         &mut state_machine,
-        &mut role,
+        &mut role
     );
 
     match response {
@@ -1787,7 +1788,6 @@ fn test_liveness_leader_updates_next_index_after_snapshot_success() {
     // Initialize leader state
     let peers = [0, 1];
     replication.initialize_leader_state(peers.iter().copied(), &storage);
-    // match index set by initialize_leader_state // replication.set_next_index_for_testing(0, 5); // Follower far behind
 
     // Handle successful InstallSnapshotResponse
     replication.handle_install_snapshot_response(
