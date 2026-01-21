@@ -67,7 +67,6 @@ All three implement the same `Storage` trait with:
 
 ### Future Projects
 
-- **Raft Consensus** (Lab 3)
 - **Sharded Key/Value Service** (Lab 4)
 
 ## Learning Objectives
@@ -161,7 +160,7 @@ Contributions welcome! Particularly interested in:
 - Additional implementation strategies (gRPC, WebSockets, etc.)
 - Performance optimizations and benchmarks
 - Documentation improvements
-- Additional MIT 6.824 labs (Raft, KV Service, etc.)
+- Additional MIT 6.824 labs (Sharded KV Service, etc.)
 
 ## Acknowledgments
 

@@ -1,6 +1,6 @@
 # Key-Value Server: Pluggable Storage Architecture Demonstration
 
-A Rust implementation inspired by [MIT 6.824 Lab 3: Raft Key-Value Service](https://pdos.csail.mit.edu/6.824/labs/lab-kvraft.html), demonstrating **storage abstraction** through three working implementations that share identical server logic.
+A Rust implementation demonstrating **storage abstraction** through three working implementations that share identical server logic. Features optimistic concurrency control, fault injection, and a gRPC protocol.
 
 **[← Back to Main README](../README.md)**
 
@@ -8,15 +8,10 @@ A Rust implementation inspired by [MIT 6.824 Lab 3: Raft Key-Value Service](http
 
 ## What This Project Demonstrates
 
-### MIT's Original Lab
-- **One implementation** with Raft consensus
-- **Learning goal**: Build a fault-tolerant replicated state machine
-- **Fixed decisions**: Raft for replication, in-memory storage
-
-### This Rust Adaptation
-- **Three storage implementations** with pluggable backends
+### Design Goals
+- **Pluggable storage backends** with identical server/client logic
 - **Learning goals**: Distributed KV protocols + abstraction design + Rust patterns
-- **Pluggable decisions**: Storage backend, persistence strategy, data structures
+- **Architectural focus**: Storage backend abstraction, persistence strategies, trait-based polymorphism
 
 **Key Innovation**: The same gRPC server and client logic run unchanged across all three storage backends, proving the abstractions work.
 

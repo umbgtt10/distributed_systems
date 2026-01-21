@@ -361,7 +361,7 @@ This project teaches:
 1. **Add a fourth implementation** (e.g., WebSockets, QUIC)
 2. **Optimize performance** (better chunking, parallel reduce, etc.)
 3. **Add benchmarks** (criterion for micro-benchmarks)
-4. **Port other MIT labs** (Raft, KV Service, etc.)
+4. **Port other MIT labs** (Sharded KV Service, etc.)
 
 ---
 
