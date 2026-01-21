@@ -42,6 +42,21 @@ This repository is intentionally structured to separate **algorithmic correctnes
 * Tokio, gRPC, Kubernetes, AWS, Grafana, Jaeger, etc. are **realizations**, not dependencies.
 * The Raft core remains close to "bare metal" and compatible with `no_std`.
 
+### 4. Monomorphization-First Architecture
+
+* This project serves as a **design exploration** for a larger future effort, demonstrating that complex distributed algorithms like Raft can be implemented entirely through **compile-time generics** (monomorphization) without dynamic dispatch (`dyn Trait`).
+* **Objective**: Prove that zero-cost abstractions scale to real-world consensus algorithms, including advanced features (log compaction, snapshots, dynamic membership, linearizable reads).
+* **Key Insight**: Raft's complexity remains manageable with generics (~11 type parameters). This approach yields:
+  * Zero runtime overhead (no vtable lookups)
+  * Aggressive compiler optimizations (inlining, dead code elimination)
+  * Embedded-friendly footprint
+* **The Trade-off**: Even though Rust's zero-cost abstractions guarantee high performance through monomorphization, **the price to pay is cognitive load**. As type parameters proliferate (11+ generics), developers face:
+  * Complex type signatures that obscure intent
+  * Increased mental overhead when reasoning about code
+  * Longer compile times as instantiations multiply
+  * Reduced IDE responsiveness and error message clarity
+* **Design Principle**: This project intentionally pushes monomorphization to its reasonable limits for Raft, demonstrating that at a certain complexity threshold, the pure monomorphization approach must be **appropriately combined with dynamic dispatch** (`dyn Trait`). This combination is architecturally significant: **generic abstractions signal and embody hard invariants** (compile-time enforced contracts that cannot be violated), while **dynamic dispatch signals soft architectural boundaries** (runtime flexibility points where behavior can vary without breaking core guarantees). 
+
 ---
 
 ## Project Structure
@@ -101,7 +116,7 @@ Exit criteria (all met):
 * ✅ Monotonic commit index
 * ✅ Correct recovery from partitions
 
-**Status**: Complete. Validated in Embassy-sim with UDP transport.
+**Status**: Complete. 110+ tests passing across 33 test files. Validated in Embassy-sim with UDP transport.
 
 ### Phase 1 — Log Compaction & Crash Recovery ✅
 

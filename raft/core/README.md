@@ -63,7 +63,7 @@ The core has been validated through:
 - ✅ **Leader Re-election**: Recovery from failures and partitions
 - ✅ **Snapshot Creation & Transfer**: Automatic log compaction and follower catch-up
 - ✅ **Crash Recovery**: Node restart with state restoration from snapshots
-- ✅ **97 Tests Passing**: Comprehensive test suite including 6 crash recovery tests
+- ✅ **110+ Tests Passing**: 33 test files covering all core features
 
 ---
 
@@ -190,6 +190,80 @@ Implementations can:
 
 ---
 
+## Code Organization
+
+### Core Components Architecture
+
+The Raft core is organized into focused, testable components:
+
+**State Management:**
+- [node_state.rs](src/node_state.rs) - Follower/Candidate/Leader states
+- [raft_node.rs](src/raft_node.rs) - Main Raft node implementation
+
+**Component Modules:**
+- [components/election_manager.rs](src/components/election_manager.rs) - Election timeouts, vote tracking
+- [components/log_replication_manager.rs](src/components/log_replication_manager.rs) - Follower tracking, next_index, match_index
+- [components/snapshot_manager.rs](src/components/snapshot_manager.rs) - Snapshot creation, threshold management
+- [components/config_change_manager.rs](src/components/config_change_manager.rs) - Configuration change protocol
+- [components/role_transition_manager.rs](src/components/role_transition_manager.rs) - State transitions, initialization
+- [components/message_handler.rs](src/components/message_handler.rs) - **All Raft message processing** (~830 LOC)
+
+**Abstractions:**
+- [transport.rs](src/transport.rs) - Network abstraction
+- [storage.rs](src/storage.rs) - Persistence abstraction
+- [state_machine.rs](src/state_machine.rs) - Application state abstraction
+- [timer_service.rs](src/timer_service.rs) - Timer abstraction
+- [observer.rs](src/observer.rs) - Telemetry/instrumentation abstraction
+
+### MessageHandler: Central Processing Unit
+
+The `MessageHandler` is the heart of Raft message processing, implementing:
+- **Vote handling**: RequestVote, PreVote RPCs with election safety
+- **Log replication**: AppendEntries with consistency checks and commit advancement
+- **Snapshot transfer**: InstallSnapshot with chunked data transfer
+- **Client commands**: Write operations submitted to leader
+- **Config changes**: AddServer/RemoveServer protocol (joint consensus prep)
+- **Timer handling**: Election and heartbeat timeout processing
+
+**Current State**: Single 830-line file with clear separation of concerns via helper methods
+**Testability**: Isolated from RaftNode via MessageHandlerContext (7 dedicated tests in message_handler_tests.rs)
+
+### Test Organization
+
+The test suite is organized by feature/scenario:
+```
+sim/tests/ (33 test files)
+├── Component Tests (5 files)
+│   ├── election_manager_tests.rs
+│   ├── log_replication_manager_tests.rs
+│   ├── snapshot_manager_tests.rs
+│   ├── config_change_manager_tests.rs
+│   └── role_transition_manager_tests.rs
+├── MessageHandler Tests (1 file)
+│   └── message_handler_tests.rs (7 tests)
+├── Election Protocol Tests (6 files)
+│   ├── basic_leader_election_tests.rs
+│   ├── pre_vote_tests.rs
+│   ├── split_leader_election_tests.rs
+│   ├── timed_election_tests.rs
+│   └── ...
+├── Replication & Safety Tests (9 files)
+│   ├── client_payload_replication_tests.rs
+│   ├── commit_index_advancement_tests.rs
+│   ├── log_matching_property_tests.rs
+│   └── ...
+├── Snapshot & Compaction Tests (5 files)
+│   ├── snapshot_creation_protocol_tests.rs
+│   ├── snapshot_infrastructure_tests.rs
+│   ├── install_snapshot_candidate_tests.rs
+│   └── crash_recovery_with_snapshots_tests.rs
+└── Configuration Tests (2 files)
+    ├── config_api_tests.rs
+    └── single_node_cluster_tests.rs
+```
+
+---
+
 ## Advanced Features: Readiness Assessment
 
 The current implementation covers the core Raft protocol. The following advanced features are described in the Raft paper and required for production readiness. Here is a detailed analysis of implementation readiness:
@@ -253,7 +327,7 @@ The current implementation covers the core Raft protocol. The following advanced
    - Update last_applied to snapshot's last_included_index
    - **Never replay uncommitted log entries** (Raft safety requirement)
 
-**Test Coverage (97 tests total):**
+**Test Coverage (110+ tests across 33 test files):**
 - ✅ Snapshot creation after threshold exceeded
 - ✅ Snapshot metadata tracking and persistence
 - ✅ InstallSnapshot RPC with chunked transfer
@@ -265,6 +339,7 @@ The current implementation covers the core Raft protocol. The following advanced
 - ✅ Follower crash during snapshot transfer
 - ✅ Recovery without snapshot (uncommitted entries discarded)
 - ✅ Continued operation after recovery
+- ✅ MessageHandler isolation tests (7 tests)
 
 **Operational Value**: ✅ Production-ready bounded memory for long-running clusters
 
@@ -397,7 +472,7 @@ The current design has `peers: C` as a **fixed field** in `RaftNode`. Dynamic me
 
 ## Recommended Implementation Order
 
-### Phase 1: Log Compaction + Snapshots ✅ COMPLETE
+### Phase 1: Log Compaction + Snapsh110+ tests passing across 33 test files
 **Status**: Implemented and tested (97 tests passing)
 
 **Completed Features:**
