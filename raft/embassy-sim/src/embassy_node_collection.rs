@@ -3,8 +3,10 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use heapless::Vec;
-use raft_core::node_collection::{CollectionError, NodeCollection};
-use raft_core::types::NodeId;
+use raft_core::{
+    collections::node_collection::{CollectionError, NodeCollection},
+    types::NodeId,
+};
 
 #[derive(Debug, Clone)]
 pub struct EmbassyNodeCollection {

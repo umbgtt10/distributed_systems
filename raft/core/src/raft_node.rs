@@ -3,19 +3,21 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    chunk_collection::ChunkCollection,
-    config_change_collection::ConfigChangeCollection,
-    config_change_manager::ConfigChangeManager,
-    election_manager::ElectionManager,
+    collections::{
+        chunk_collection::ChunkCollection, config_change_collection::ConfigChangeCollection,
+        configuration::Configuration, log_entry_collection::LogEntryCollection,
+        map_collection::MapCollection, node_collection::NodeCollection,
+    },
+    components::{
+        config_change_manager::ConfigChangeManager,
+        election_manager::ElectionManager,
+        log_replication_manager::LogReplicationManager,
+        message_handler::{ClientError, MessageHandler, MessageHandlerContext},
+        snapshot_manager::SnapshotManager,
+    },
     event::Event,
-    log_entry_collection::LogEntryCollection,
-    log_replication_manager::LogReplicationManager,
-    map_collection::MapCollection,
-    message_handler::{ClientError, MessageHandler, MessageHandlerContext},
-    node_collection::NodeCollection,
     node_state::NodeState,
     observer::Observer,
-    snapshot_manager::SnapshotManager,
     state_machine::StateMachine,
     storage::Storage,
     timer_service::TimerService,
@@ -108,8 +110,7 @@ where
         // Start election timer for initial Follower state
         election.timer_service_mut().reset_election_timer();
 
-        let config_manager =
-            ConfigChangeManager::new(crate::configuration::Configuration::new(peers));
+        let config_manager = ConfigChangeManager::new(Configuration::new(peers));
         let snapshot_manager = SnapshotManager::new(snapshot_threshold);
 
         RaftNode {
@@ -164,7 +165,7 @@ where
         self.election.timer_service()
     }
 
-    pub fn config(&self) -> &crate::configuration::Configuration<C> {
+    pub fn config(&self) -> &Configuration<C> {
         self.config_manager.config()
     }
 

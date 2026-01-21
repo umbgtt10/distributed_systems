@@ -3,7 +3,21 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    chunk_collection::ChunkCollection, config_change_collection::ConfigChangeCollection, election_manager::ElectionManager, log_entry_collection::LogEntryCollection, log_replication_manager::LogReplicationManager, map_collection::MapCollection, node_collection::NodeCollection, observer::Observer, raft_node::RaftNode, state_machine::StateMachine, storage::Storage, timer_service::TimerService, transport::Transport, types::{LogIndex, NodeId}
+    collections::{
+        chunk_collection::ChunkCollection, config_change_collection::ConfigChangeCollection,
+        log_entry_collection::LogEntryCollection, map_collection::MapCollection,
+        node_collection::NodeCollection,
+    },
+    components::{
+        election_manager::ElectionManager, log_replication_manager::LogReplicationManager,
+    },
+    observer::Observer,
+    raft_node::RaftNode,
+    state_machine::StateMachine,
+    storage::Storage,
+    timer_service::TimerService,
+    transport::Transport,
+    types::{LogIndex, NodeId},
 };
 
 /// Builder for constructing a RaftNode with proper initialization order

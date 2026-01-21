@@ -3,9 +3,9 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use raft_core::{
+    components::snapshot_manager::SnapshotManager,
     log_entry::{EntryType, LogEntry},
     snapshot::{Snapshot, SnapshotError, SnapshotMetadata},
-    snapshot_manager::SnapshotManager,
     state_machine::StateMachine,
     storage::Storage,
 };

@@ -3,8 +3,8 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
+    collections::log_entry_collection::LogEntryCollection,
     log_entry::LogEntry,
-    log_entry_collection::LogEntryCollection,
     snapshot::{
         Snapshot, SnapshotBuilder, SnapshotChunk, SnapshotData, SnapshotError, SnapshotMetadata,
     },
@@ -15,7 +15,7 @@ pub trait Storage {
     type Payload: Clone;
     type LogEntryCollection: LogEntryCollection<Payload = Self::Payload>;
     type SnapshotData: SnapshotData<Chunk = Self::SnapshotChunk>;
-    type SnapshotChunk: crate::chunk_collection::ChunkCollection + Clone;
+    type SnapshotChunk: crate::collections::chunk_collection::ChunkCollection + Clone;
     type SnapshotBuilder: SnapshotBuilder<
         Output = Self::SnapshotData,
         ChunkInput = Self::SnapshotChunk,

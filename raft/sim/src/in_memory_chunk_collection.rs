@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-use raft_core::chunk_collection::{ChunkCollection, CollectionError};
+use raft_core::collections::chunk_collection::{ChunkCollection, CollectionError};
 
 /// In-memory implementation of ChunkCollection using Vec<u8>
 #[derive(Clone, Debug, PartialEq, Eq)]

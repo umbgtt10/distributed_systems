@@ -3,8 +3,8 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use raft_core::{
+    collections::log_entry_collection::{CollectionError, LogEntryCollection},
     log_entry::LogEntry,
-    log_entry_collection::{CollectionError, LogEntryCollection},
 };
 
 #[derive(Debug, Clone, PartialEq)]

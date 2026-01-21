@@ -3,9 +3,11 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use heapless::Vec;
-use raft_core::config_change_collection::{CollectionError, ConfigChangeCollection};
-use raft_core::log_entry::ConfigurationChange;
-use raft_core::types::LogIndex;
+use raft_core::{
+    collections::config_change_collection::{CollectionError, ConfigChangeCollection},
+    log_entry::ConfigurationChange,
+    types::LogIndex,
+};
 
 #[derive(Clone, Debug)]
 pub struct EmbassyConfigChangeCollection {

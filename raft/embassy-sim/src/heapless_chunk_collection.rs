@@ -7,7 +7,7 @@
 //! We use a newtype wrapper to satisfy Rust's orphan rules
 
 use heapless::Vec;
-use raft_core::chunk_collection::{ChunkCollection, CollectionError};
+use raft_core::collections::chunk_collection::{ChunkCollection, CollectionError};
 
 /// Newtype wrapper for heapless Vec to implement ChunkCollection
 #[derive(Clone, Debug, PartialEq)]

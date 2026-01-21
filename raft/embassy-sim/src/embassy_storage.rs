@@ -7,12 +7,13 @@ use crate::embassy_state_machine::EmbassySnapshotData;
 use crate::heapless_chunk_collection::HeaplessChunkVec;
 use alloc::string::String;
 use heapless::Vec;
-use raft_core::chunk_collection::ChunkCollection;
-use raft_core::log_entry::LogEntry;
-use raft_core::log_entry_collection::LogEntryCollection;
-use raft_core::snapshot::{SnapshotBuilder, SnapshotData};
-use raft_core::storage::Storage;
-use raft_core::types::{LogIndex, NodeId, Term};
+use raft_core::{
+    collections::{chunk_collection::ChunkCollection, log_entry_collection::LogEntryCollection},
+    log_entry::LogEntry,
+    snapshot::{SnapshotBuilder, SnapshotData},
+    storage::Storage,
+    types::{LogIndex, NodeId, Term},
+};
 
 /// Simple in-memory storage for Embassy Raft nodes
 /// In a real system, this would persist to flash

@@ -12,7 +12,7 @@ use crate::heapless_chunk_collection::HeaplessChunkVec;
 use alloc::string::String;
 use alloc::vec::Vec;
 use raft_core::{
-    chunk_collection::ChunkCollection,
+    collections::{chunk_collection::ChunkCollection, log_entry_collection::LogEntryCollection},
     log_entry::{ConfigurationChange, EntryType, LogEntry},
     raft_messages::RaftMsg,
 };
@@ -179,7 +179,6 @@ impl From<RaftMsg<String, EmbassyLogEntryCollection, HeaplessChunkVec<512>>> for
                 entries,
                 leader_commit,
             } => {
-                use raft_core::log_entry_collection::LogEntryCollection;
                 let wire_entries: Vec<WireLogEntry> = entries
                     .as_slice()
                     .iter()
@@ -244,8 +243,6 @@ impl TryFrom<WireRaftMsg> for RaftMsg<String, EmbassyLogEntryCollection, Heaples
     type Error = &'static str;
 
     fn try_from(wire: WireRaftMsg) -> Result<Self, Self::Error> {
-        use raft_core::log_entry_collection::LogEntryCollection;
-
         match wire {
             WireRaftMsg::RequestVote {
                 term,
@@ -297,7 +294,6 @@ impl TryFrom<WireRaftMsg> for RaftMsg<String, EmbassyLogEntryCollection, Heaples
                 data,
                 done,
             } => {
-                use raft_core::chunk_collection::ChunkCollection;
                 let chunk = HeaplessChunkVec::<512>::new(&data);
                 Ok(RaftMsg::InstallSnapshot {
                     term,
@@ -335,7 +331,6 @@ mod tests {
     use super::*;
     use alloc::string::ToString;
     use alloc::vec;
-    use raft_core::log_entry_collection::LogEntryCollection;
 
     #[test]
     fn test_request_vote_round_trip() {

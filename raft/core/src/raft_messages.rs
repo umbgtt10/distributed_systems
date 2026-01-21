@@ -3,8 +3,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    chunk_collection::ChunkCollection,
-    log_entry_collection::LogEntryCollection,
+    collections::{chunk_collection::ChunkCollection, log_entry_collection::LogEntryCollection},
     types::{LogIndex, NodeId, Term},
 };
 

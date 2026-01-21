@@ -8,7 +8,7 @@ use embassy_futures::select::{select4, Either4};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::{Receiver, Sender};
 use embassy_time::Duration;
-use raft_core::message_handler::ClientError;
+use raft_core::components::message_handler::ClientError;
 
 use crate::cancellation_token::CancellationToken;
 use crate::cluster::{ClientRequest, ClusterError};
@@ -25,15 +25,18 @@ use crate::led_state::LedState;
 use crate::transport::async_transport::AsyncTransport;
 use crate::transport::embassy_transport::EmbassyTransport;
 
-use raft_core::election_manager::ElectionManager;
-use raft_core::event::Event;
-use raft_core::log_replication_manager::LogReplicationManager;
-use raft_core::node_collection::NodeCollection;
-use raft_core::observer::EventLevel;
-use raft_core::raft_node::RaftNode;
-use raft_core::raft_node_builder::RaftNodeBuilder;
-use raft_core::timer_service::TimerService;
-use raft_core::types::{LogIndex, NodeId};
+use raft_core::{
+    collections::node_collection::NodeCollection,
+    components::{
+        election_manager::ElectionManager, log_replication_manager::LogReplicationManager,
+    },
+    event::Event,
+    observer::EventLevel,
+    raft_node::RaftNode,
+    raft_node_builder::RaftNodeBuilder,
+    timer_service::TimerService,
+    types::{LogIndex, NodeId},
+};
 
 type EmbassyRaftNode = RaftNode<
     EmbassyTransport,

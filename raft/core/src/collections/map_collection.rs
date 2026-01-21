@@ -2,8 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-use crate::configuration::Configuration;
-use crate::node_collection::NodeCollection;
+use crate::collections::{configuration::Configuration, node_collection::NodeCollection};
 use crate::types::{LogIndex, NodeId};
 
 pub trait MapCollection {

@@ -8,15 +8,13 @@
 //! independently of RaftNode through MessageHandlerContext.
 
 use raft_core::{
-    config_change_manager::ConfigChangeManager,
-    configuration::Configuration,
-    election_manager::ElectionManager,
-    log_replication_manager::LogReplicationManager,
-    message_handler::{MessageHandler, MessageHandlerContext},
-    node_state::NodeState,
-    snapshot_manager::SnapshotManager,
-    storage::Storage,
-    timer_service::TimerKind,
+    collections::configuration::Configuration, components::{
+        config_change_manager::ConfigChangeManager,
+        election_manager::ElectionManager,
+        log_replication_manager::LogReplicationManager,
+        message_handler::{ClientError, MessageHandler, MessageHandlerContext},
+        snapshot_manager::SnapshotManager,
+    }, log_entry::ConfigurationChange, node_state::NodeState, storage::Storage, timer_service::TimerKind
 };
 use raft_sim::{
     in_memory_chunk_collection::InMemoryChunkCollection,
@@ -308,8 +306,6 @@ fn test_message_handler_handle_election_timer_as_leader() {
 
 #[test]
 fn test_message_handler_submit_client_command_as_follower_fails() {
-    use raft_core::message_handler::ClientError;
-
     let node_id = 2;
     let mut role = NodeState::Follower;
     let mut current_term = 1;
@@ -344,8 +340,6 @@ fn test_message_handler_submit_client_command_as_follower_fails() {
 
 #[test]
 fn test_message_handler_submit_config_change_as_follower_fails() {
-    use raft_core::{log_entry::ConfigurationChange, message_handler::ClientError};
-
     let node_id = 2;
     let mut role = NodeState::Follower;
     let mut current_term = 1;

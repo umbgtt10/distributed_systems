@@ -3,10 +3,13 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use heapless::index_map::FnvIndexMap;
-use raft_core::configuration::Configuration;
-use raft_core::map_collection::MapCollection;
-use raft_core::node_collection::NodeCollection;
-use raft_core::types::{LogIndex, NodeId};
+use raft_core::{
+    collections::{
+        configuration::Configuration, map_collection::MapCollection,
+        node_collection::NodeCollection,
+    },
+    types::{LogIndex, NodeId},
+};
 
 #[derive(Debug, Clone)]
 pub struct EmbassyMapCollection {

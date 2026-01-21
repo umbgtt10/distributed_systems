@@ -5,7 +5,7 @@
 //! Null observer implementation for testing
 
 use raft_core::{
-    log_entry_collection::LogEntryCollection,
+    collections::log_entry_collection::LogEntryCollection,
     observer::{EventLevel, Observer, Role, TimerKind},
     raft_messages::RaftMsg,
     types::{LogIndex, NodeId, Term},

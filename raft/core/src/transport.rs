@@ -3,8 +3,9 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    chunk_collection::ChunkCollection, log_entry_collection::LogEntryCollection,
-    raft_messages::RaftMsg, types::NodeId,
+    collections::{chunk_collection::ChunkCollection, log_entry_collection::LogEntryCollection},
+    raft_messages::RaftMsg,
+    types::NodeId,
 };
 
 pub trait Transport {

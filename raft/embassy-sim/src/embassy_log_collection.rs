@@ -5,8 +5,8 @@
 use alloc::string::String;
 use heapless::Vec;
 use raft_core::{
+    collections::log_entry_collection::{CollectionError, LogEntryCollection},
     log_entry::LogEntry,
-    log_entry_collection::{CollectionError, LogEntryCollection},
 };
 
 #[derive(Debug, Clone, PartialEq)]

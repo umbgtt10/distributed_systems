@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 // http://www.apache.org/licenses/LICENSE-2.0
 
-use raft_core::config_change_collection::{CollectionError, ConfigChangeCollection};
+use raft_core::collections::config_change_collection::{CollectionError, ConfigChangeCollection};
 use raft_core::log_entry::ConfigurationChange;
 use raft_core::types::LogIndex;
 

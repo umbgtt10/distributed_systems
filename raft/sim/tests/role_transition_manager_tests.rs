@@ -3,9 +3,15 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use raft_core::{
-    election_manager::ElectionManager, log_replication_manager::LogReplicationManager,
-    node_collection::NodeCollection, node_state::NodeState, observer::Role, raft_messages::RaftMsg,
-    role_transition_manager::RoleTransitionManager, storage::Storage,
+    collections::node_collection::NodeCollection,
+    components::{
+        election_manager::ElectionManager, log_replication_manager::LogReplicationManager,
+        role_transition_manager::RoleTransitionManager,
+    },
+    node_state::NodeState,
+    observer::Role,
+    raft_messages::RaftMsg,
+    storage::Storage,
 };
 use raft_sim::{
     in_memory_chunk_collection::InMemoryChunkCollection,

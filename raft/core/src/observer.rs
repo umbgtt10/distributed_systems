@@ -79,11 +79,11 @@ pub trait Observer {
     type Payload: Clone;
 
     /// The collection type for log entries
-    type LogEntries: crate::log_entry_collection::LogEntryCollection<Payload = Self::Payload>
+    type LogEntries: crate::collections::log_entry_collection::LogEntryCollection<Payload = Self::Payload>
         + Clone;
 
     /// The collection type for snapshot chunks
-    type ChunkCollection: crate::chunk_collection::ChunkCollection + Clone;
+    type ChunkCollection: crate::collections::chunk_collection::ChunkCollection + Clone;
 
     /// Get the minimum event level this observer cares about
     fn min_level(&self) -> EventLevel;

@@ -6,26 +6,16 @@
 
 extern crate alloc;
 
-pub mod chunk_collection;
-pub mod config_change_collection;
-pub mod config_change_manager;
-pub mod configuration;
-pub mod election_manager;
+pub mod collections;
+pub mod components;
 pub mod event;
 pub mod log_entry;
-pub mod log_entry_collection;
-pub mod log_replication_manager;
-pub mod map_collection;
-pub mod message_handler;
-pub mod node_collection;
 pub mod node_state;
 pub mod observer;
 pub mod raft_messages;
 pub mod raft_node;
 pub mod raft_node_builder;
-pub mod role_transition_manager;
 pub mod snapshot;
-pub mod snapshot_manager;
 pub mod state_machine;
 pub mod storage;
 pub mod timer_service;

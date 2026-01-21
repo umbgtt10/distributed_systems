@@ -6,8 +6,8 @@ use crate::in_memory_chunk_collection::InMemoryChunkCollection;
 use crate::in_memory_log_entry_collection::InMemoryLogEntryCollection;
 use crate::snapshot_types::{SimSnapshotBuilder, SimSnapshotData};
 use raft_core::{
+    collections::log_entry_collection::LogEntryCollection,
     log_entry::LogEntry,
-    log_entry_collection::LogEntryCollection,
     snapshot::{
         Snapshot, SnapshotBuilder, SnapshotChunk, SnapshotData, SnapshotError, SnapshotMetadata,
     },

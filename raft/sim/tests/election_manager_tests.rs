@@ -3,10 +3,9 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use raft_core::{
-    configuration::Configuration,
-    election_manager::ElectionManager,
+    collections::{configuration::Configuration, node_collection::NodeCollection},
+    components::election_manager::ElectionManager,
     log_entry::{EntryType, LogEntry},
-    node_collection::NodeCollection,
     node_state::NodeState,
     raft_messages::RaftMsg,
     snapshot::{Snapshot, SnapshotMetadata},

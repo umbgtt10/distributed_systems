@@ -3,20 +3,22 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    chunk_collection::ChunkCollection,
-    config_change_collection::ConfigChangeCollection,
-    config_change_manager::{ConfigChangeManager, ConfigError},
-    election_manager::ElectionManager,
+    collections::{
+        chunk_collection::ChunkCollection, config_change_collection::ConfigChangeCollection,
+        log_entry_collection::LogEntryCollection, map_collection::MapCollection,
+        node_collection::NodeCollection,
+    },
+    components::{
+        config_change_manager::{ConfigChangeManager, ConfigError},
+        election_manager::ElectionManager,
+        log_replication_manager::LogReplicationManager,
+        role_transition_manager::RoleTransitionManager,
+        snapshot_manager::SnapshotManager,
+    },
     log_entry::{ConfigurationChange, EntryType, LogEntry},
-    log_entry_collection::LogEntryCollection,
-    log_replication_manager::LogReplicationManager,
-    map_collection::MapCollection,
-    node_collection::NodeCollection,
     node_state::NodeState,
     observer::{Observer, Role},
     raft_messages::RaftMsg,
-    role_transition_manager::RoleTransitionManager,
-    snapshot_manager::SnapshotManager,
     state_machine::StateMachine,
     storage::Storage,
     timer_service::TimerService,

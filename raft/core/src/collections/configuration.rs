@@ -7,7 +7,7 @@
 //! Tracks the set of nodes in the Raft cluster and provides
 //! quorum calculation helpers.
 
-use crate::node_collection::NodeCollection;
+use crate::collections::node_collection::NodeCollection;
 use crate::types::NodeId;
 
 /// Represents the current cluster configuration

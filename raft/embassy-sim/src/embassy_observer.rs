@@ -3,10 +3,12 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::heapless_chunk_collection::HeaplessChunkVec;
-use raft_core::log_entry_collection::LogEntryCollection;
-use raft_core::observer::{EventLevel, Observer, Role, TimerKind};
-use raft_core::raft_messages::RaftMsg;
-use raft_core::types::{LogIndex, NodeId, Term};
+use raft_core::{
+    collections::log_entry_collection::LogEntryCollection,
+    observer::{EventLevel, Observer, Role, TimerKind},
+    raft_messages::RaftMsg,
+    types::{LogIndex, NodeId, Term},
+};
 
 /// Observer implementation for Embassy that logs essential events
 #[derive(Clone)]

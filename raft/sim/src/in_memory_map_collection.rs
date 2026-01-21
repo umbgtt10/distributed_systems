@@ -1,8 +1,9 @@
 use indexmap::IndexMap;
 use raft_core::{
-    configuration::Configuration,
-    map_collection::MapCollection,
-    node_collection::NodeCollection,
+    collections::{
+        configuration::Configuration, map_collection::MapCollection,
+        node_collection::NodeCollection,
+    },
     types::{LogIndex, NodeId},
 };
 

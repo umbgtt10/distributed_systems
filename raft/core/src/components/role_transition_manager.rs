@@ -3,11 +3,13 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    election_manager::ElectionManager,
-    log_entry_collection::LogEntryCollection,
-    log_replication_manager::LogReplicationManager,
-    map_collection::MapCollection,
-    node_collection::NodeCollection,
+    collections::{
+        chunk_collection::ChunkCollection, log_entry_collection::LogEntryCollection,
+        map_collection::MapCollection, node_collection::NodeCollection,
+    },
+    components::{
+        election_manager::ElectionManager, log_replication_manager::LogReplicationManager,
+    },
     node_state::NodeState,
     observer::{Observer, Role},
     raft_messages::RaftMsg,
@@ -36,7 +38,7 @@ impl RoleTransitionManager {
         P: Clone,
         S: Storage<Payload = P, LogEntryCollection = L> + Clone,
         L: LogEntryCollection<Payload = P> + Clone,
-        CC: crate::chunk_collection::ChunkCollection + Clone,
+        CC: ChunkCollection + Clone,
         C: NodeCollection,
         TS: TimerService,
         O: Observer<Payload = P, LogEntries = L, ChunkCollection = CC>,
@@ -60,7 +62,7 @@ impl RoleTransitionManager {
         P: Clone,
         S: Storage<Payload = P, LogEntryCollection = L> + Clone,
         L: LogEntryCollection<Payload = P> + Clone,
-        CC: crate::chunk_collection::ChunkCollection + Clone,
+        CC: ChunkCollection + Clone,
         C: NodeCollection,
         TS: TimerService,
         O: Observer<Payload = P, LogEntries = L, ChunkCollection = CC>,

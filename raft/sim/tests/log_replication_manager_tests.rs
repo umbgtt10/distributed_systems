@@ -3,12 +3,12 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use raft_core::{
-    configuration::Configuration,
+    collections::{
+        configuration::Configuration, log_entry_collection::LogEntryCollection,
+        map_collection::MapCollection, node_collection::NodeCollection,
+    },
+    components::log_replication_manager::LogReplicationManager,
     log_entry::{EntryType, LogEntry},
-    log_entry_collection::LogEntryCollection,
-    log_replication_manager::LogReplicationManager,
-    map_collection::MapCollection,
-    node_collection::NodeCollection,
     node_state::NodeState,
     raft_messages::RaftMsg,
     snapshot::{Snapshot, SnapshotMetadata},

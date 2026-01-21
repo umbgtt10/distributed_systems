@@ -3,8 +3,8 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use raft_core::{
-    log_entry::EntryType, log_entry::LogEntry, log_entry_collection::LogEntryCollection,
-    snapshot::Snapshot, snapshot::SnapshotBuilder, snapshot::SnapshotData,
+    collections::log_entry_collection::LogEntryCollection, log_entry::EntryType,
+    log_entry::LogEntry, snapshot::Snapshot, snapshot::SnapshotBuilder, snapshot::SnapshotData,
     snapshot::SnapshotMetadata, state_machine::StateMachine, storage::Storage,
 };
 use raft_sim::{

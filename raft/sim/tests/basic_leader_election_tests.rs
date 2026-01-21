@@ -3,8 +3,11 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use raft_core::{
-    event::Event, log_entry_collection::LogEntryCollection, node_collection::NodeCollection,
-    node_state::NodeState, raft_messages::RaftMsg, timer_service::TimerKind,
+    collections::{log_entry_collection::LogEntryCollection, node_collection::NodeCollection},
+    event::Event,
+    node_state::NodeState,
+    raft_messages::RaftMsg,
+    timer_service::TimerKind,
 };
 use raft_sim::{
     in_memory_log_entry_collection::InMemoryLogEntryCollection,

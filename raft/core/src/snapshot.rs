@@ -15,7 +15,10 @@
 //! - bytes::Bytes for zero-copy networking
 //! - Custom types for specific serialization formats
 
-use crate::{chunk_collection::ChunkCollection, types::{LogIndex, Term}};
+use crate::{
+    collections::chunk_collection::ChunkCollection,
+    types::{LogIndex, Term},
+};
 
 // ============================================================
 // CORE TYPES

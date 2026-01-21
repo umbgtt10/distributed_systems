@@ -3,7 +3,7 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use raft_core::{
-    node_collection::{CollectionError, NodeCollection},
+    collections::node_collection::{CollectionError, NodeCollection},
     types::NodeId,
 };
 

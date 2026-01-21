@@ -3,12 +3,12 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    config_change_collection::ConfigChangeCollection,
-    configuration::Configuration,
+    collections::{
+        config_change_collection::ConfigChangeCollection, configuration::Configuration,
+        map_collection::MapCollection, node_collection::NodeCollection,
+    },
+    components::log_replication_manager::LogReplicationManager,
     log_entry::ConfigurationChange,
-    log_replication_manager::LogReplicationManager,
-    map_collection::MapCollection,
-    node_collection::NodeCollection,
     node_state::NodeState,
     observer::Observer,
     types::{LogIndex, NodeId},

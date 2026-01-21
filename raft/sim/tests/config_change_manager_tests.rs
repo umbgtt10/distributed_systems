@@ -3,10 +3,9 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use raft_core::{
-    config_change_manager::{ConfigChangeManager, ConfigError},
-    configuration::Configuration,
+    collections::{configuration::Configuration, node_collection::NodeCollection},
+    components::config_change_manager::{ConfigChangeManager, ConfigError},
     log_entry::ConfigurationChange,
-    node_collection::NodeCollection,
 };
 use raft_sim::{
     in_memory_map_collection::InMemoryMapCollection,

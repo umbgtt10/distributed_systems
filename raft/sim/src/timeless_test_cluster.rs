@@ -14,9 +14,14 @@ use crate::{
 };
 use indexmap::IndexMap;
 use raft_core::{
-    election_manager::ElectionManager, event::Event,
-    log_replication_manager::LogReplicationManager, node_collection::NodeCollection,
-    raft_node::RaftNode, raft_node_builder::RaftNodeBuilder, types::NodeId,
+    collections::node_collection::NodeCollection,
+    components::{
+        election_manager::ElectionManager, log_replication_manager::LogReplicationManager,
+    },
+    event::Event,
+    raft_node::RaftNode,
+    raft_node_builder::RaftNodeBuilder,
+    types::NodeId,
 };
 use std::sync::{Arc, Mutex};
 

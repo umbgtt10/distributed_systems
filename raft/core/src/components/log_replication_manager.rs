@@ -3,13 +3,12 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    chunk_collection::ChunkCollection,
-    config_change_collection::ConfigChangeCollection,
-    configuration::Configuration,
+    collections::{
+        chunk_collection::ChunkCollection, config_change_collection::ConfigChangeCollection,
+        configuration::Configuration, log_entry_collection::LogEntryCollection,
+        map_collection::MapCollection, node_collection::NodeCollection,
+    },
     log_entry::EntryType,
-    log_entry_collection::LogEntryCollection,
-    map_collection::MapCollection,
-    node_collection::NodeCollection,
     node_state::NodeState,
     raft_messages::RaftMsg,
     snapshot::SnapshotBuilder,
